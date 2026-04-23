@@ -78,6 +78,10 @@ case "$1" in
         shift
         ${python_exe} ${UNITREE_RL_LAB_PATH}/scripts/rsl_rl/train.py --viz none "$@"
         ;;
+    -n|--newton)
+        shift
+        ${python_exe} ${UNITREE_RL_LAB_PATH}/scripts/rsl_rl/train.py --viz none "$@" presets=newton
+        ;;
     *) # unknown option
         ;;
 esac

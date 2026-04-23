@@ -12,15 +12,51 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
+from isaaclab.sensors import RayCasterCfg, patterns
+from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 from isaaclab.utils.noise import UniformNoiseCfg as Unoise
+from isaaclab_newton.physics import MJWarpSolverCfg, NewtonCfg
+from isaaclab_newton.sensors import ContactSensorCfg as NewtonContactSensorCfg
 from isaaclab_physx.physics import PhysxCfg
+from isaaclab_physx.sensors import ContactSensorCfg as PhysXContactSensorCfg
+from isaaclab_tasks.utils import PresetCfg, preset
 
 from unitree_rl_lab.assets.robots.unitree import UNITREE_G1_29DOF_CFG as ROBOT_CFG
 from unitree_rl_lab.tasks.locomotion import mdp
+
+
+@configclass
+class PhysicsCfg(PresetCfg):
+    physx: PhysxCfg = PhysxCfg(gpu_max_rigid_patch_count=10 * 2**15)
+    default = physx
+    newton: NewtonCfg = NewtonCfg(
+        solver_cfg=MJWarpSolverCfg(
+            njmax=95,
+            nconmax=20,
+            cone="pyramidal",
+            impratio=1,
+            integrator="implicitfast",
+            ls_parallel=True,
+            ls_iterations=15,
+        ),
+        num_substeps=1,
+        debug_mode=False,
+    )
+
+
+@configclass
+class ContactSensorPresetCfg(PresetCfg):
+    physx: PhysXContactSensorCfg = PhysXContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True
+    )
+    default = physx
+    newton: NewtonContactSensorCfg = NewtonContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True
+    )
+
 
 COBBLESTONE_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
     size=(8.0, 8.0),
@@ -74,7 +110,7 @@ class RobotSceneCfg(InteractiveSceneCfg):
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
     )
-    contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True)
+    contact_forces: ContactSensorPresetCfg = ContactSensorPresetCfg()
     # lights
     sky_light = AssetBaseCfg(
         prim_path="/World/skyLight",
@@ -86,21 +122,8 @@ class RobotSceneCfg(InteractiveSceneCfg):
 
 
 @configclass
-class EventCfg:
-    """Configuration for events."""
-
-    # startup
-    physics_material = EventTerm(
-        func=mdp.randomize_rigid_body_material,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.3, 1.0),
-            "dynamic_friction_range": (0.3, 1.0),
-            "restitution_range": (0.0, 0.0),
-            "num_buckets": 64,
-        },
-    )
+class ResetEventCfg:
+    """Events supported by both Newton and PhysX."""
 
     add_base_mass = EventTerm(
         func=mdp.randomize_rigid_body_mass,
@@ -155,6 +178,37 @@ class EventCfg:
         interval_range_s=(5.0, 5.0),
         params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
     )
+
+
+@configclass
+class StartupEventCfg:
+    """Startup events supported by PhysX only."""
+
+    physics_material = EventTerm(
+        func=mdp.randomize_rigid_body_material,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+            "static_friction_range": (0.3, 1.0),
+            "dynamic_friction_range": (0.3, 1.0),
+            "restitution_range": (0.0, 0.0),
+            "num_buckets": 64,
+        },
+    )
+
+
+@configclass
+class PhysxEventCfg(ResetEventCfg, StartupEventCfg):
+    """Full PhysX event configuration (reset + startup)."""
+
+    pass
+
+
+@configclass
+class EventCfgPreset(PresetCfg):
+    default: PhysxEventCfg = PhysxEventCfg()
+    physx: PhysxEventCfg = PhysxEventCfg()
+    newton: ResetEventCfg = ResetEventCfg()
 
 
 @configclass
@@ -359,6 +413,8 @@ class CurriculumCfg:
 class RobotEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the locomotion velocity-tracking environment."""
 
+    # Physics backend (preset-switchable)
+    sim: SimulationCfg = SimulationCfg(physics=PhysicsCfg())
     # Scene settings
     scene: RobotSceneCfg = RobotSceneCfg(num_envs=4096, env_spacing=2.5)
     # Basic settings
@@ -368,7 +424,7 @@ class RobotEnvCfg(ManagerBasedRLEnvCfg):
     # MDP settings
     rewards: RewardsCfg = RewardsCfg()
     terminations: TerminationsCfg = TerminationsCfg()
-    events: EventCfg = EventCfg()
+    events: EventCfgPreset = EventCfgPreset()
     curriculum: CurriculumCfg = CurriculumCfg()
 
     def __post_init__(self):
@@ -380,11 +436,11 @@ class RobotEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
-        self.sim.physics = PhysxCfg(gpu_max_rigid_patch_count=10 * 2**15)
 
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
-        self.scene.contact_forces.update_period = self.sim.dt
+        self.scene.contact_forces.physx.update_period = self.sim.dt
+        self.scene.contact_forces.newton.update_period = self.sim.dt
         self.scene.height_scanner.update_period = self.decimation * self.sim.dt
 
         # check if terrain levels curriculum is enabled - if so, enable curriculum for terrain generator
@@ -396,6 +452,27 @@ class RobotEnvCfg(ManagerBasedRLEnvCfg):
             if self.scene.terrain.terrain_generator is not None:
                 self.scene.terrain.terrain_generator.curriculum = False
 
+    def validate_config(self):
+        from isaaclab_newton.physics import NewtonCfg
+
+        physics = self.sim.physics
+        if isinstance(physics, NewtonCfg):
+            if self.scene.terrain.terrain_generator is not None:
+                raise ValueError(
+                    "Newton backend does not support terrain generators. "
+                    "Use Unitree-G1-29dof-Velocity-Flat or set terrain_type='plane'."
+                )
+        if hasattr(self.scene, "camera") and self.scene.camera is not None:
+            from isaaclab_newton.renderers import NewtonWarpRendererCfg
+
+            if isinstance(self.scene.camera.renderer_cfg, NewtonWarpRendererCfg):
+                allowed = {"rgb", "depth"}
+                for data_type in self.scene.camera.data_types:
+                    if data_type not in allowed:
+                        raise ValueError(
+                            f"Newton Warp renderer does not support '{data_type}'. Only rgb and depth are supported."
+                        )
+
 
 @configclass
 class RobotPlayEnvCfg(RobotEnvCfg):
@@ -404,4 +481,24 @@ class RobotPlayEnvCfg(RobotEnvCfg):
         self.scene.num_envs = 32
         self.scene.terrain.terrain_generator.num_rows = 2
         self.scene.terrain.terrain_generator.num_cols = 10
+        self.commands.base_velocity.ranges = self.commands.base_velocity.limit_ranges
+
+
+@configclass
+class RobotFlatEnvCfg(RobotEnvCfg):
+    """Flat-terrain variant compatible with both PhysX and Newton."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.terrain.terrain_type = "plane"
+        self.scene.terrain.terrain_generator = None
+        self.scene.height_scanner = None
+        self.curriculum.terrain_levels = None
+
+
+@configclass
+class RobotFlatPlayEnvCfg(RobotFlatEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 32
         self.commands.base_velocity.ranges = self.commands.base_velocity.limit_ranges
