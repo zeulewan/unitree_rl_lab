@@ -138,6 +138,18 @@ def wheelchair_lateral_velocity_l2(
     return torch.square(wheelchair.data.root_lin_vel_w[:, 1])
 
 
+def wheelchair_forward_line_l2(
+    env: ManagerBasedRLEnv,
+    allowed_error: float = 0.05,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+) -> torch.Tensor:
+    """Penalize the wheelchair root drifting away from the environment forward centerline."""
+    wheelchair: Articulation = env.scene[asset_cfg.name]
+    lateral_position = wheelchair.data.root_pos_w[:, 1] - env.scene.env_origins[:, 1]
+    lateral_error = torch.clamp(torch.abs(lateral_position) - allowed_error, min=0.0)
+    return torch.square(lateral_error)
+
+
 def wheelchair_yaw_velocity_l2(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
