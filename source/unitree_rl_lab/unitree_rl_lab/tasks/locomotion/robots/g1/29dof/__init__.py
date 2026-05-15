@@ -32,3 +32,36 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"unitree_rl_lab.tasks.locomotion.agents.rsl_rl_ppo_cfg:BasePPORunnerCfg",
     },
 )
+
+gym.register(
+    id="Unitree-G1-29dof-Sprint-10ms",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.sprint_10ms_env_cfg:Sprint10msRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.sprint_10ms_env_cfg:Sprint10msRobotPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"unitree_rl_lab.tasks.locomotion.agents.rsl_rl_ppo_cfg:BasePPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Unitree-G1-29dof-Sprint-10ms-Curriculum-Resume",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.sprint_10ms_env_cfg:Sprint10msCurriculumResumeEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.sprint_10ms_env_cfg:Sprint10msCurriculumResumePlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.sprint_10ms_env_cfg:Sprint10msCurriculumResumePPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Unitree-G1-29dof-Sprint-10ms-Gait",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.sprint_10ms_env_cfg:Sprint10msGaitRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.sprint_10ms_env_cfg:Sprint10msGaitRobotPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.sprint_10ms_env_cfg:Sprint10msGaitPPORunnerCfg",
+    },
+)

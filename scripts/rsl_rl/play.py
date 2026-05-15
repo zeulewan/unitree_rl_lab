@@ -19,6 +19,23 @@ import cli_args  # isort: skip
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
+parser.add_argument("--video-follow-robot", action="store_true", default=False, help="Track the first robot in recorded videos.")
+parser.add_argument(
+    "--video-camera-eye-offset",
+    type=float,
+    nargs=3,
+    default=(-6.0, -5.0, 2.8),
+    metavar=("X", "Y", "Z"),
+    help="Camera eye offset from the first robot when --video-follow-robot is set.",
+)
+parser.add_argument(
+    "--video-camera-target-offset",
+    type=float,
+    nargs=3,
+    default=(0.0, 0.0, 0.9),
+    metavar=("X", "Y", "Z"),
+    help="Camera target offset from the first robot when --video-follow-robot is set.",
+)
 parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
 )
@@ -67,6 +84,22 @@ import unitree_rl_lab.tasks  # noqa: F401
 from unitree_rl_lab.utils.parser_cfg import parse_env_cfg
 
 
+def _set_follow_camera(env):
+    """Point the render camera at the first robot for useful recorded videos."""
+    if not args_cli.video_follow_robot:
+        return
+    try:
+        robot = env.unwrapped.scene["robot"]
+        root_pos = robot.data.root_pos_w[0].detach().cpu()
+        eye_offset = torch.tensor(args_cli.video_camera_eye_offset)
+        target_offset = torch.tensor(args_cli.video_camera_target_offset)
+        env.unwrapped.sim.set_camera_view((root_pos + eye_offset).tolist(), (root_pos + target_offset).tolist())
+    except Exception as err:
+        if not getattr(_set_follow_camera, "_warned", False):
+            print(f"[WARN] Failed to update video follow camera: {err}")
+            _set_follow_camera._warned = True
+
+
 def main():
     """Play with RSL-RL agent."""
     # parse configuration
@@ -97,10 +130,12 @@ def main():
 
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+    base_env = env
 
     # convert to single-agent instance if required by the RL algorithm
     if isinstance(env.unwrapped, DirectMARLEnv):
         env = multi_agent_to_single_agent(env)
+        base_env = env
 
     # wrap for video recording
     if args_cli.video:
@@ -160,6 +195,7 @@ def main():
     obs = env.get_observations()
     if version("rsl-rl-lib").startswith("2.3."):
         obs, _ = env.get_observations()
+    _set_follow_camera(base_env)
     timestep = 0
     # simulate environment
     while simulation_app.is_running():
@@ -168,6 +204,7 @@ def main():
         with torch.inference_mode():
             # agent stepping
             actions = policy(obs)
+            _set_follow_camera(base_env)
             # env stepping
             obs, _, _, _ = env.step(actions)
         if args_cli.video:
