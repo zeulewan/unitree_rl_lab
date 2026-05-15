@@ -33,7 +33,10 @@ ACTIVE_MANUAL_WHEELCHAIR_CFG = ArticulationCfg(
         replace_cylinders_with_capsules=False,
         collision_from_visuals=False,
         activate_contact_sensors=True,
-        joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(target_type="none"),
+        joint_drive=sim_utils.UrdfConverterCfg.JointDriveCfg(
+            target_type="none",
+            gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0.0, damping=0.0),
+        ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=False,
             solver_position_iteration_count=8,

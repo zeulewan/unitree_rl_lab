@@ -78,6 +78,114 @@ def hand_handle_position_error_l2(
     return torch.mean(torch.sum(torch.square(body_pos_b - target_pos_b), dim=-1), dim=-1)
 
 
+def dynamic_hand_handle_position_error_exp(
+    env: ManagerBasedRLEnv,
+    std: float,
+    robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    wheelchair_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+) -> torch.Tensor:
+    """Reward robot wrist bodies for staying close to moving wheelchair handle bodies."""
+    robot: Articulation = env.scene[robot_cfg.name]
+    wheelchair: Articulation = env.scene[wheelchair_cfg.name]
+    wrist_pos_w = robot.data.body_pos_w[:, robot_cfg.body_ids, :]
+    handle_pos_w = wheelchair.data.body_pos_w[:, wheelchair_cfg.body_ids, :]
+    position_error = torch.mean(torch.sum(torch.square(wrist_pos_w - handle_pos_w), dim=-1), dim=-1)
+    return torch.exp(-position_error / (std * std))
+
+
+def dynamic_hand_handle_position_error_l2(
+    env: ManagerBasedRLEnv,
+    robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    wheelchair_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+) -> torch.Tensor:
+    """Penalize distance between selected robot wrist bodies and moving wheelchair handles."""
+    robot: Articulation = env.scene[robot_cfg.name]
+    wheelchair: Articulation = env.scene[wheelchair_cfg.name]
+    wrist_pos_w = robot.data.body_pos_w[:, robot_cfg.body_ids, :]
+    handle_pos_w = wheelchair.data.body_pos_w[:, wheelchair_cfg.body_ids, :]
+    return torch.mean(torch.sum(torch.square(wrist_pos_w - handle_pos_w), dim=-1), dim=-1)
+
+
+def wheelchair_forward_velocity_exp(
+    env: ManagerBasedRLEnv,
+    command_name: str = "base_velocity",
+    std: float = 0.25,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+) -> torch.Tensor:
+    """Reward the wheelchair root for matching the commanded forward velocity in world X."""
+    wheelchair: Articulation = env.scene[asset_cfg.name]
+    command_x = env.command_manager.get_command(command_name)[:, 0]
+    velocity_error = torch.square(wheelchair.data.root_lin_vel_w[:, 0] - command_x)
+    return torch.exp(-velocity_error / (std * std))
+
+
+def wheelchair_forward_progress(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+    max_velocity: float = 1.2,
+) -> torch.Tensor:
+    """Reward positive wheelchair forward velocity."""
+    wheelchair: Articulation = env.scene[asset_cfg.name]
+    return torch.clamp(wheelchair.data.root_lin_vel_w[:, 0], min=0.0, max=max_velocity)
+
+
+def wheelchair_lateral_velocity_l2(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+) -> torch.Tensor:
+    """Penalize the wheelchair drifting sideways."""
+    wheelchair: Articulation = env.scene[asset_cfg.name]
+    return torch.square(wheelchair.data.root_lin_vel_w[:, 1])
+
+
+def wheelchair_yaw_velocity_l2(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+) -> torch.Tensor:
+    """Penalize the wheelchair spinning while being pushed."""
+    wheelchair: Articulation = env.scene[asset_cfg.name]
+    return torch.square(wheelchair.data.root_ang_vel_w[:, 2])
+
+
+def wheelchair_tilt_l2(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+) -> torch.Tensor:
+    """Penalize wheelchair roll/pitch by using projected gravity in the chair body frame."""
+    wheelchair: Articulation = env.scene[asset_cfg.name]
+    return torch.sum(torch.square(wheelchair.data.projected_gravity_b[:, :2]), dim=-1)
+
+
+def filtered_contact_presence(
+    env: ManagerBasedRLEnv,
+    sensor_names: list[str],
+    threshold: float = 1.0,
+) -> torch.Tensor:
+    """Reward whether each filtered contact sensor sees contact above a force threshold."""
+    reward = torch.zeros(env.num_envs, device=env.device)
+    for sensor_name in sensor_names:
+        contact_sensor: ContactSensor = env.scene.sensors[sensor_name]
+        force_matrix = contact_sensor.data.force_matrix_w
+        contact_force = torch.linalg.norm(force_matrix, dim=-1)
+        reward += torch.any(contact_force > threshold, dim=(1, 2)).float()
+    return reward / max(len(sensor_names), 1)
+
+
+def filtered_contact_force_penalty(
+    env: ManagerBasedRLEnv,
+    sensor_names: list[str],
+    threshold: float = 1.0,
+) -> torch.Tensor:
+    """Penalize filtered contact forces above a threshold across multiple sensors."""
+    penalty = torch.zeros(env.num_envs, device=env.device)
+    for sensor_name in sensor_names:
+        contact_sensor: ContactSensor = env.scene.sensors[sensor_name]
+        force_matrix = contact_sensor.data.force_matrix_w
+        contact_force = torch.linalg.norm(force_matrix, dim=-1)
+        penalty += torch.sum(torch.clamp(contact_force - threshold, min=0.0), dim=(1, 2))
+    return penalty
+
+
 """
 Robot.
 """
