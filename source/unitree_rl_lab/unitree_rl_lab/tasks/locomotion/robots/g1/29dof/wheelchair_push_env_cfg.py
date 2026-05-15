@@ -345,19 +345,19 @@ class DynamicWheelchairPushRewardsCfg(WheelchairPushRewardsCfg):
 
     wheelchair_lateral_velocity = RewTerm(
         func=mdp.wheelchair_lateral_velocity_l2,
-        weight=-2.0,
+        weight=-1.0,
         params={"asset_cfg": SceneEntityCfg("wheelchair")},
     )
 
     wheelchair_forward_line = RewTerm(
         func=mdp.wheelchair_forward_line_l2,
-        weight=-8.0,
+        weight=-1.5,
         params={"allowed_error": 0.05, "asset_cfg": SceneEntityCfg("wheelchair")},
     )
 
     wheelchair_yaw_velocity = RewTerm(
         func=mdp.wheelchair_yaw_velocity_l2,
-        weight=-1.0,
+        weight=-0.5,
         params={"asset_cfg": SceneEntityCfg("wheelchair")},
     )
 
