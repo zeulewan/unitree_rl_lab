@@ -36,7 +36,18 @@ parser.add_argument("--task", type=str, default="Unitree-G1-29dof-Velocity", hel
 parser.add_argument("--command-x", type=float, default=0.55, help="Forward velocity command in m/s.")
 parser.add_argument("--command-y", type=float, default=0.0, help="Lateral velocity command in m/s.")
 parser.add_argument("--command-yaw", type=float, default=0.0, help="Yaw-rate command in rad/s.")
-parser.add_argument("--wheelchair-forward-offset", type=float, default=1.05, help="Wheelchair center offset ahead of the robot.")
+parser.add_argument(
+    "--wheelchair-visual",
+    choices=("procedural", "free3d"),
+    default="procedural",
+    help="Use the simple USD primitive chair or the locally downloaded Free3D wheelchair visual mesh.",
+)
+parser.add_argument(
+    "--wheelchair-forward-offset",
+    type=float,
+    default=None,
+    help="Wheelchair root offset ahead of the robot. Defaults depend on the selected visual.",
+)
 parser.add_argument(
     "--hide-hand-connectors",
     action="store_true",
@@ -71,6 +82,7 @@ simulation_app = app_launcher.app
 import math
 import os
 import time
+from pathlib import Path
 
 import gymnasium as gym
 import torch
@@ -91,6 +103,8 @@ from unitree_rl_lab.utils.parser_cfg import parse_env_cfg
 
 class WheelchairProp:
     """Small USD-primitive wheelchair that follows a robot-relative handle offset."""
+
+    default_forward_offset = 1.05
 
     def __init__(self, prim_path: str = "/World/WheelchairPushDemo"):
         self.stage = omni.usd.get_context().get_stage()
@@ -146,6 +160,84 @@ class WheelchairProp:
         cylinder.CreateHeightAttr(height)
         self._set_color(cylinder.GetPrim(), color)
         self._set_local_transform(cylinder.GetPrim(), pos, (1.0, 1.0, 1.0))
+
+    def update_from_robot(self, robot, forward_offset: float):
+        root_pos = robot.data.root_pos_w[0].detach().cpu()
+        quat = robot.data.root_quat_w[0].detach().cpu()
+        yaw = _quat_wxyz_to_yaw(quat)
+        forward = torch.tensor([math.cos(yaw), math.sin(yaw), 0.0])
+        chair_pos = root_pos + forward * forward_offset
+        chair_pos[2] = 0.0
+        self.translate_op.Set(Gf.Vec3d(float(chair_pos[0]), float(chair_pos[1]), float(chair_pos[2])))
+        self.rotate_op.Set(math.degrees(yaw))
+        return chair_pos, yaw
+
+    def handle_positions_world(self, chair_pos: torch.Tensor, yaw: float) -> tuple[torch.Tensor, torch.Tensor]:
+        left_handle = self._local_point_to_world(self.left_handle_local, chair_pos, yaw)
+        right_handle = self._local_point_to_world(self.right_handle_local, chair_pos, yaw)
+        return left_handle, right_handle
+
+    def _local_point_to_world(self, local_point: torch.Tensor, chair_pos: torch.Tensor, yaw: float) -> torch.Tensor:
+        cos_yaw = math.cos(yaw)
+        sin_yaw = math.sin(yaw)
+        return torch.tensor(
+            [
+                float(chair_pos[0]) + cos_yaw * float(local_point[0]) - sin_yaw * float(local_point[1]),
+                float(chair_pos[1]) + sin_yaw * float(local_point[0]) + cos_yaw * float(local_point[1]),
+                float(chair_pos[2]) + float(local_point[2]),
+            ]
+        )
+
+
+class Free3DWheelchairProp:
+    """Downloaded Free3D active wheelchair mesh, kept at the same demo handle offset."""
+
+    default_forward_offset = 0.75
+
+    def __init__(self, prim_path: str = "/World/Free3DWheelchairPushDemo"):
+        self.stage = omni.usd.get_context().get_stage()
+        self.root_path = prim_path
+        self.left_handle_local = torch.tensor([-0.40, 0.24, 0.88])
+        self.right_handle_local = torch.tensor([-0.40, -0.24, 0.88])
+
+        self.root = UsdGeom.Xform.Define(self.stage, prim_path)
+        root_xform = UsdGeom.Xformable(self.root.GetPrim())
+        root_xform.ClearXformOpOrder()
+        self.translate_op = root_xform.AddTranslateOp()
+        self.rotate_op = root_xform.AddRotateZOp()
+
+        obj_path = (
+            _repo_root()
+            / "assets"
+            / "objects"
+            / "wheelchair"
+            / "free3d_active_wheelchair"
+            / "visual"
+            / "active_wheelchair.obj"
+        )
+        if not obj_path.exists():
+            raise FileNotFoundError(
+                f"Missing Free3D wheelchair OBJ at {obj_path}. "
+                "Run scripts/assets/import_free3d_active_wheelchair.py first."
+            )
+        self._add_obj_mesh(obj_path)
+
+    def _add_obj_mesh(self, obj_path: Path):
+        vertices, faces_by_material = _load_obj_mesh_groups(obj_path)
+        material_colors = _load_mtl_colors(obj_path.with_suffix(".mtl"))
+
+        for index, (material_name, faces) in enumerate(faces_by_material.items()):
+            if not faces:
+                continue
+            mesh_path = f"{self.root_path}/mesh_{index:03d}_{_sanitize_prim_name(material_name)}"
+            mesh = UsdGeom.Mesh.Define(self.stage, mesh_path)
+            points, face_counts, face_indices = _remap_faces(vertices, faces)
+            mesh.CreatePointsAttr(points)
+            mesh.CreateFaceVertexCountsAttr(face_counts)
+            mesh.CreateFaceVertexIndicesAttr(face_indices)
+            mesh.CreateSubdivisionSchemeAttr("none")
+            color = material_colors.get(material_name, (0.55, 0.55, 0.55))
+            UsdGeom.Gprim(mesh.GetPrim()).CreateDisplayColorPrimvar(UsdGeom.Tokens.constant).Set([Gf.Vec3f(*color)])
 
     def update_from_robot(self, robot, forward_offset: float):
         root_pos = robot.data.root_pos_w[0].detach().cpu()
@@ -264,6 +356,86 @@ def _find_body_index(robot, body_name: str) -> int:
     raise ValueError(f"Could not find robot body '{body_name}'.")
 
 
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "assets" / "objects" / "wheelchair").exists():
+            return parent
+    raise RuntimeError("Could not locate unitree_rl_lab repository root.")
+
+
+def _sanitize_prim_name(name: str) -> str:
+    cleaned = "".join(char if char.isalnum() or char == "_" else "_" for char in name)
+    return cleaned or "default"
+
+
+def _load_mtl_colors(mtl_path: Path) -> dict[str, tuple[float, float, float]]:
+    colors: dict[str, tuple[float, float, float]] = {}
+    current_material = None
+    if not mtl_path.exists():
+        return colors
+
+    with mtl_path.open("r", encoding="utf-8", errors="replace") as mtl_file:
+        for raw_line in mtl_file:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split()
+            if parts[0] == "newmtl" and len(parts) > 1:
+                current_material = parts[1]
+            elif parts[0] == "Kd" and current_material and len(parts) >= 4:
+                colors[current_material] = tuple(float(value) for value in parts[1:4])
+    return colors
+
+
+def _load_obj_mesh_groups(obj_path: Path) -> tuple[list[tuple[float, float, float]], dict[str, list[list[int]]]]:
+    vertices: list[tuple[float, float, float]] = []
+    faces_by_material: dict[str, list[list[int]]] = {"default": []}
+    current_material = "default"
+
+    with obj_path.open("r", encoding="utf-8", errors="replace") as obj_file:
+        for raw_line in obj_file:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split()
+            if parts[0] == "v" and len(parts) >= 4:
+                vertices.append((float(parts[1]), float(parts[2]), float(parts[3])))
+            elif parts[0] == "usemtl" and len(parts) > 1:
+                current_material = parts[1]
+                faces_by_material.setdefault(current_material, [])
+            elif parts[0] == "f" and len(parts) >= 4:
+                face = [_parse_obj_vertex_index(token, len(vertices)) for token in parts[1:]]
+                faces_by_material.setdefault(current_material, []).append(face)
+
+    return vertices, faces_by_material
+
+
+def _parse_obj_vertex_index(token: str, vertex_count: int) -> int:
+    index = int(token.split("/")[0])
+    if index < 0:
+        return vertex_count + index
+    return index - 1
+
+
+def _remap_faces(
+    vertices: list[tuple[float, float, float]], faces: list[list[int]]
+) -> tuple[list[Gf.Vec3f], list[int], list[int]]:
+    remap: dict[int, int] = {}
+    points: list[Gf.Vec3f] = []
+    face_counts: list[int] = []
+    face_indices: list[int] = []
+
+    for face in faces:
+        face_counts.append(len(face))
+        for vertex_index in face:
+            if vertex_index not in remap:
+                remap[vertex_index] = len(points)
+                points.append(Gf.Vec3f(*vertices[vertex_index]))
+            face_indices.append(remap[vertex_index])
+
+    return points, face_counts, face_indices
+
+
 def _set_fixed_command(env):
     try:
         command = env.unwrapped.command_manager.get_command("base_velocity")
@@ -331,7 +503,13 @@ def main():
         env = multi_agent_to_single_agent(env)
         base_env = env
 
-    wheelchair = WheelchairProp()
+    if args_cli.wheelchair_visual == "free3d":
+        wheelchair = Free3DWheelchairProp()
+    else:
+        wheelchair = WheelchairProp()
+    wheelchair_forward_offset = args_cli.wheelchair_forward_offset
+    if wheelchair_forward_offset is None:
+        wheelchair_forward_offset = wheelchair.default_forward_offset
 
     if args_cli.video:
         video_folder = args_cli.video_folder or os.path.join(log_dir, "videos", "wheelchair_push")
@@ -375,7 +553,7 @@ def main():
         right_wrist_body_idx = _find_body_index(robot, "right_wrist_yaw_link")
     initial_root_pos = robot.data.root_pos_w[0, :2].detach().clone()
     _set_fixed_command(base_env)
-    chair_pos, yaw = wheelchair.update_from_robot(robot, args_cli.wheelchair_forward_offset)
+    chair_pos, yaw = wheelchair.update_from_robot(robot, wheelchair_forward_offset)
     if hand_connectors is not None:
         left_handle, right_handle = wheelchair.handle_positions_world(chair_pos, yaw)
         hand_connectors.update(
@@ -391,7 +569,7 @@ def main():
         start_time = time.time()
         with torch.inference_mode():
             _set_fixed_command(base_env)
-            chair_pos, yaw = wheelchair.update_from_robot(robot, args_cli.wheelchair_forward_offset)
+            chair_pos, yaw = wheelchair.update_from_robot(robot, wheelchair_forward_offset)
             if hand_connectors is not None:
                 left_handle, right_handle = wheelchair.handle_positions_world(chair_pos, yaw)
                 hand_connectors.update(
