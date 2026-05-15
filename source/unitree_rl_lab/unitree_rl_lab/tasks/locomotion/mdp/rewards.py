@@ -38,6 +38,46 @@ def stand_still(
     return reward * (cmd_norm < 0.1)
 
 
+def _body_positions_in_root_frame(asset: Articulation, body_ids: list[int]) -> torch.Tensor:
+    body_pos_w = asset.data.body_pos_w[:, body_ids, :]
+    body_pos_translated = body_pos_w - asset.data.root_pos_w[:, None, :]
+    body_pos_b = torch.zeros_like(body_pos_translated)
+    for body_index in range(body_pos_translated.shape[1]):
+        body_pos_b[:, body_index, :] = quat_apply_inverse(asset.data.root_quat_w, body_pos_translated[:, body_index, :])
+    return body_pos_b
+
+
+def hand_handle_position_error_exp(
+    env: ManagerBasedRLEnv,
+    target_positions_b: list[list[float]],
+    std: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Reward keeping selected hand/wrist bodies close to fixed wheelchair-handle targets.
+
+    The target positions are expressed in the robot root frame. This keeps the observation and
+    action spaces identical to the base locomotion policy, so this task can be warm-started from
+    the walking checkpoint while shifting the default arm pose into a handle-grip posture.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    body_pos_b = _body_positions_in_root_frame(asset, asset_cfg.body_ids)
+    target_pos_b = torch.tensor(target_positions_b, device=env.device, dtype=body_pos_b.dtype).unsqueeze(0)
+    position_error = torch.mean(torch.sum(torch.square(body_pos_b - target_pos_b), dim=-1), dim=-1)
+    return torch.exp(-position_error / (std * std))
+
+
+def hand_handle_position_error_l2(
+    env: ManagerBasedRLEnv,
+    target_positions_b: list[list[float]],
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalize distance between selected hand/wrist bodies and fixed handle targets."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    body_pos_b = _body_positions_in_root_frame(asset, asset_cfg.body_ids)
+    target_pos_b = torch.tensor(target_positions_b, device=env.device, dtype=body_pos_b.dtype).unsqueeze(0)
+    return torch.mean(torch.sum(torch.square(body_pos_b - target_pos_b), dim=-1), dim=-1)
+
+
 """
 Robot.
 """

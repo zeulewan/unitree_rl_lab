@@ -65,3 +65,14 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{__name__}.sprint_10ms_env_cfg:Sprint10msGaitPPORunnerCfg",
     },
 )
+
+gym.register(
+    id="Unitree-G1-29dof-Wheelchair-Push",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:WheelchairPushRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:WheelchairPushRobotPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:WheelchairPushPPORunnerCfg",
+    },
+)
