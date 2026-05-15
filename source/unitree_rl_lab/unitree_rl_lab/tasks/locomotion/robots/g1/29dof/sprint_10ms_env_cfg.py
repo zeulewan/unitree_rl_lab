@@ -8,6 +8,10 @@ from unitree_rl_lab.tasks.locomotion.agents.rsl_rl_ppo_cfg import BasePPORunnerC
 
 from .fast_running_env_cfg import FastRunningRobotEnvCfg
 
+SPRINT_TILE_SIZE = (80.0, 80.0)
+SPRINT_TERRAIN_ROWS = 21
+SPRINT_TERRAIN_COLS = 21
+
 
 @configclass
 class Sprint10msRobotEnvCfg(FastRunningRobotEnvCfg):
@@ -16,11 +20,17 @@ class Sprint10msRobotEnvCfg(FastRunningRobotEnvCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        # A 20 second episode at 10 m/s can cover 200 m. Use larger tiles in
-        # both axes so failures are policy failures, not terrain-edge falls.
-        self.scene.terrain.terrain_generator.size = (20.0, 20.0)
-        self.scene.terrain.terrain_generator.num_rows = 21
-        self.scene.terrain.terrain_generator.num_cols = 21
+        # A 20 second episode at 10 m/s can cover 200 m. Use a large flat map
+        # and grid-spaced origins so failures are policy failures, not terrain
+        # edge artifacts.
+        self.scene.env_spacing = 8.0
+        self.scene.terrain.use_terrain_origins = False
+        self.scene.terrain.terrain_generator.size = SPRINT_TILE_SIZE
+        self.scene.terrain.terrain_generator.border_width = 80.0
+        self.scene.terrain.terrain_generator.num_rows = SPRINT_TERRAIN_ROWS
+        self.scene.terrain.terrain_generator.num_cols = SPRINT_TERRAIN_COLS
+        self.scene.terrain.terrain_generator.curriculum = False
+        self.curriculum.terrain_levels = None
 
         self.commands.base_velocity.ranges = mdp.UniformLevelVelocityCommandCfg.Ranges(
             lin_vel_x=(2.0, 4.0),
@@ -54,9 +64,6 @@ class Sprint10msRobotPlayEnvCfg(Sprint10msRobotEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         self.scene.num_envs = 20
-        self.scene.terrain.terrain_generator.size = (20.0, 20.0)
-        self.scene.terrain.terrain_generator.num_rows = 21
-        self.scene.terrain.terrain_generator.num_cols = 21
         self.commands.base_velocity.ranges = self.commands.base_velocity.limit_ranges
 
 
@@ -95,6 +102,7 @@ class Sprint10msGaitRobotEnvCfg(Sprint10msRobotEnvCfg):
 
         self.commands.base_velocity.rel_standing_envs = 0.0
         self.commands.base_velocity.rel_heading_envs = 0.0
+        self.events.reset_base.params["pose_range"]["yaw"] = (0.0, 0.0)
         self.commands.base_velocity.ranges = mdp.UniformLevelVelocityCommandCfg.Ranges(
             lin_vel_x=(5.5, 6.0),
             lin_vel_y=(0.0, 0.0),
