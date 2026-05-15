@@ -44,6 +44,24 @@ DYNAMIC_WHEELCHAIR_HANDLE_BODY_NAMES = [
 """Left/right wheelchair handle bodies in the passive wheelchair articulation."""
 
 
+DYNAMIC_WHEELCHAIR_WHEEL_BODY_NAMES = [
+    "left_rear_wheel",
+    "right_rear_wheel",
+    "left_front_caster",
+    "right_front_caster",
+]
+"""Wheelchair wheel/caster bodies that should remain near their ground-contact heights."""
+
+
+DYNAMIC_WHEELCHAIR_WHEEL_GROUND_HEIGHTS = [
+    0.31,
+    0.31,
+    0.075,
+    0.075,
+]
+"""Nominal world-Z body center heights when all wheelchair wheels are on flat ground."""
+
+
 DYNAMIC_WHEELCHAIR_INVALID_CONTACT_SENSORS = [
     "wheelchair_left_handle_invalid_contact",
     "wheelchair_right_handle_invalid_contact",
@@ -341,6 +359,16 @@ class DynamicWheelchairPushRewardsCfg(WheelchairPushRewardsCfg):
         func=mdp.wheelchair_tilt_l2,
         weight=-5.0,
         params={"asset_cfg": SceneEntityCfg("wheelchair")},
+    )
+
+    wheelchair_wheel_ground_height = RewTerm(
+        func=mdp.wheelchair_wheel_height_l2,
+        weight=-50.0,
+        params={
+            "target_heights": DYNAMIC_WHEELCHAIR_WHEEL_GROUND_HEIGHTS,
+            "allowed_error": 0.01,
+            "asset_cfg": SceneEntityCfg("wheelchair", body_names=DYNAMIC_WHEELCHAIR_WHEEL_BODY_NAMES),
+        },
     )
 
     wheelchair_handle_contact = RewTerm(

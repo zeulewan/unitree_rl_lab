@@ -166,7 +166,7 @@
   </link>
 
   <joint name="left_front_caster_joint" type="continuous">
-    <origin xyz="0.00 0.00 -0.05" rpy="0 0 0"/>
+    <origin xyz="0.00 0.00 -0.085" rpy="0 0 0"/>
     <parent link="left_caster_yaw_link"/>
     <child link="left_front_caster"/>
     <axis xyz="0 1 0"/>
@@ -174,7 +174,7 @@
   </joint>
 
   <joint name="right_front_caster_joint" type="continuous">
-    <origin xyz="0.00 0.00 -0.05" rpy="0 0 0"/>
+    <origin xyz="0.00 0.00 -0.085" rpy="0 0 0"/>
     <parent link="right_caster_yaw_link"/>
     <child link="right_front_caster"/>
     <axis xyz="0 1 0"/>

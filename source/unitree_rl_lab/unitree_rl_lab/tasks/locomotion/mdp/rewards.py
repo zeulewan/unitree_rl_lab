@@ -156,6 +156,20 @@ def wheelchair_tilt_l2(
     return torch.sum(torch.square(wheelchair.data.projected_gravity_b[:, :2]), dim=-1)
 
 
+def wheelchair_wheel_height_l2(
+    env: ManagerBasedRLEnv,
+    target_heights: list[float],
+    allowed_error: float = 0.01,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+) -> torch.Tensor:
+    """Penalize wheelchair wheel/caster body heights drifting from their ground-contact height."""
+    wheelchair: Articulation = env.scene[asset_cfg.name]
+    wheel_heights = wheelchair.data.body_pos_w[:, asset_cfg.body_ids, 2]
+    target_height_tensor = torch.tensor(target_heights, device=env.device, dtype=wheel_heights.dtype).unsqueeze(0)
+    height_error = torch.clamp(torch.abs(wheel_heights - target_height_tensor) - allowed_error, min=0.0)
+    return torch.mean(torch.square(height_error), dim=-1)
+
+
 def filtered_contact_presence(
     env: ManagerBasedRLEnv,
     sensor_names: list[str],
