@@ -45,6 +45,8 @@ DYNAMIC_WHEELCHAIR_HANDLE_BODY_NAMES = [
 
 
 DYNAMIC_WHEELCHAIR_INVALID_CONTACT_SENSORS = [
+    "wheelchair_left_handle_invalid_contact",
+    "wheelchair_right_handle_invalid_contact",
     "wheelchair_base_robot_contact",
     "wheelchair_left_rear_wheel_robot_contact",
     "wheelchair_right_rear_wheel_robot_contact",
@@ -95,6 +97,41 @@ DYNAMIC_WHEELCHAIR_ROBOT_CONTACT_FILTERS = [
     f"{{ENV_REGEX_NS}}/Robot/{body_name}" for body_name in DYNAMIC_WHEELCHAIR_ROBOT_CONTACT_FILTER_BODIES
 ]
 """Exact robot prim paths for PhysX filtered wheelchair contact sensors."""
+
+
+DYNAMIC_WHEELCHAIR_LEFT_HANDLE_ALLOWED_BODIES = [
+    "left_wrist_yaw_link",
+    "left_rubber_hand",
+]
+"""Robot end-effector bodies allowed to contact the left wheelchair handle."""
+
+
+DYNAMIC_WHEELCHAIR_RIGHT_HANDLE_ALLOWED_BODIES = [
+    "right_wrist_yaw_link",
+    "right_rubber_hand",
+]
+"""Robot end-effector bodies allowed to contact the right wheelchair handle."""
+
+
+DYNAMIC_WHEELCHAIR_LEFT_HANDLE_ALLOWED_FILTERS = [
+    f"{{ENV_REGEX_NS}}/Robot/{body_name}" for body_name in DYNAMIC_WHEELCHAIR_LEFT_HANDLE_ALLOWED_BODIES
+]
+DYNAMIC_WHEELCHAIR_RIGHT_HANDLE_ALLOWED_FILTERS = [
+    f"{{ENV_REGEX_NS}}/Robot/{body_name}" for body_name in DYNAMIC_WHEELCHAIR_RIGHT_HANDLE_ALLOWED_BODIES
+]
+
+
+DYNAMIC_WHEELCHAIR_LEFT_HANDLE_INVALID_FILTERS = [
+    f"{{ENV_REGEX_NS}}/Robot/{body_name}"
+    for body_name in DYNAMIC_WHEELCHAIR_ROBOT_CONTACT_FILTER_BODIES
+    if body_name not in DYNAMIC_WHEELCHAIR_LEFT_HANDLE_ALLOWED_BODIES
+]
+DYNAMIC_WHEELCHAIR_RIGHT_HANDLE_INVALID_FILTERS = [
+    f"{{ENV_REGEX_NS}}/Robot/{body_name}"
+    for body_name in DYNAMIC_WHEELCHAIR_ROBOT_CONTACT_FILTER_BODIES
+    if body_name not in DYNAMIC_WHEELCHAIR_RIGHT_HANDLE_ALLOWED_BODIES
+]
+"""Exact robot prim paths that are penalized if they touch the wheelchair handles."""
 
 
 @configclass
@@ -197,12 +234,22 @@ class DynamicWheelchairPushSceneCfg(RobotSceneCfg):
     wheelchair_left_handle_robot_contact = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Wheelchair/left_handle_frame",
         history_length=3,
-        filter_prim_paths_expr=DYNAMIC_WHEELCHAIR_ROBOT_CONTACT_FILTERS,
+        filter_prim_paths_expr=DYNAMIC_WHEELCHAIR_LEFT_HANDLE_ALLOWED_FILTERS,
     )
     wheelchair_right_handle_robot_contact = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Wheelchair/right_handle_frame",
         history_length=3,
-        filter_prim_paths_expr=DYNAMIC_WHEELCHAIR_ROBOT_CONTACT_FILTERS,
+        filter_prim_paths_expr=DYNAMIC_WHEELCHAIR_RIGHT_HANDLE_ALLOWED_FILTERS,
+    )
+    wheelchair_left_handle_invalid_contact = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Wheelchair/left_handle_frame",
+        history_length=3,
+        filter_prim_paths_expr=DYNAMIC_WHEELCHAIR_LEFT_HANDLE_INVALID_FILTERS,
+    )
+    wheelchair_right_handle_invalid_contact = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Wheelchair/right_handle_frame",
+        history_length=3,
+        filter_prim_paths_expr=DYNAMIC_WHEELCHAIR_RIGHT_HANDLE_INVALID_FILTERS,
     )
     wheelchair_base_robot_contact = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Wheelchair/base_link",
