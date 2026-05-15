@@ -51,6 +51,12 @@ parser.add_argument(
     help="Camera target offset from the first robot when --video-follow-robot is set.",
 )
 parser.add_argument(
+    "--video-camera-orbit-deg",
+    type=float,
+    default=0.0,
+    help="Yaw degrees to rotate the follow camera eye offset over the recorded clip.",
+)
+parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
 )
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
@@ -77,6 +83,7 @@ simulation_app = app_launcher.app
 """Rest everything follows."""
 
 import gymnasium as gym
+import math
 import os
 import time
 import torch
@@ -125,8 +132,20 @@ def _set_follow_camera(env, timestep: int = 0):
             )
         env_index = max(0, min(_set_follow_camera._selected_env_index, root_pos_w.shape[0] - 1))
         root_pos = root_pos_w[env_index].cpu()
-        eye_offset = torch.tensor(args_cli.video_camera_eye_offset)
-        target_offset = torch.tensor(args_cli.video_camera_target_offset)
+        eye_offset = torch.tensor(args_cli.video_camera_eye_offset, dtype=root_pos.dtype)
+        target_offset = torch.tensor(args_cli.video_camera_target_offset, dtype=root_pos.dtype)
+        if args_cli.video_camera_orbit_deg != 0.0:
+            progress = 0.0
+            if args_cli.video_length > 0:
+                progress = (timestep - args_cli.video_start_step) / float(args_cli.video_length)
+                progress = max(0.0, min(1.0, progress))
+            angle = math.radians(args_cli.video_camera_orbit_deg) * progress
+            cos_angle = math.cos(angle)
+            sin_angle = math.sin(angle)
+            offset_x = float(eye_offset[0])
+            offset_y = float(eye_offset[1])
+            eye_offset[0] = cos_angle * offset_x - sin_angle * offset_y
+            eye_offset[1] = sin_angle * offset_x + cos_angle * offset_y
         env.unwrapped.sim.set_camera_view((root_pos + eye_offset).tolist(), (root_pos + target_offset).tolist())
     except Exception as err:
         if not getattr(_set_follow_camera, "_warned", False):
