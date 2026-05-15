@@ -38,6 +38,18 @@ parser.add_argument("--command-y", type=float, default=0.0, help="Lateral veloci
 parser.add_argument("--command-yaw", type=float, default=0.0, help="Yaw-rate command in rad/s.")
 parser.add_argument("--wheelchair-forward-offset", type=float, default=1.05, help="Wheelchair center offset ahead of the robot.")
 parser.add_argument(
+    "--hide-hand-connectors",
+    action="store_true",
+    default=False,
+    help="Hide the visual rods between the robot wrist links and wheelchair handles.",
+)
+parser.add_argument(
+    "--hand-connector-radius",
+    type=float,
+    default=0.025,
+    help="Radius of the visual hand-to-handle connector rods, in meters.",
+)
+parser.add_argument(
     "--camera-mode",
     choices=("fixed", "follow"),
     default="fixed",
@@ -83,6 +95,8 @@ class WheelchairProp:
     def __init__(self, prim_path: str = "/World/WheelchairPushDemo"):
         self.stage = omni.usd.get_context().get_stage()
         self.root_path = prim_path
+        self.left_handle_local = torch.tensor([-0.72, 0.24, 0.98])
+        self.right_handle_local = torch.tensor([-0.72, -0.24, 0.98])
         self.root = UsdGeom.Xform.Define(self.stage, prim_path)
         root_xform = UsdGeom.Xformable(self.root.GetPrim())
         root_xform.ClearXformOpOrder()
@@ -144,10 +158,110 @@ class WheelchairProp:
         self.rotate_op.Set(math.degrees(yaw))
         return chair_pos, yaw
 
+    def handle_positions_world(self, chair_pos: torch.Tensor, yaw: float) -> tuple[torch.Tensor, torch.Tensor]:
+        left_handle = self._local_point_to_world(self.left_handle_local, chair_pos, yaw)
+        right_handle = self._local_point_to_world(self.right_handle_local, chair_pos, yaw)
+        return left_handle, right_handle
+
+    def _local_point_to_world(self, local_point: torch.Tensor, chair_pos: torch.Tensor, yaw: float) -> torch.Tensor:
+        cos_yaw = math.cos(yaw)
+        sin_yaw = math.sin(yaw)
+        return torch.tensor(
+            [
+                float(chair_pos[0]) + cos_yaw * float(local_point[0]) - sin_yaw * float(local_point[1]),
+                float(chair_pos[1]) + sin_yaw * float(local_point[0]) + cos_yaw * float(local_point[1]),
+                float(chair_pos[2]) + float(local_point[2]),
+            ]
+        )
+
+
+class HandHandleConnectors:
+    """Visible rods that mark the current wrist-to-handle attachment targets."""
+
+    def __init__(self, prim_path: str = "/World/WheelchairPushDemoHandHandleConnectors", radius: float = 0.025):
+        self.stage = omni.usd.get_context().get_stage()
+        self.root_path = prim_path
+        UsdGeom.Xform.Define(self.stage, prim_path)
+        self.left = self._add_connector("left", (0.05, 0.35, 1.0), radius)
+        self.right = self._add_connector("right", (1.0, 0.18, 0.08), radius)
+        self.left_wrist_marker = self._add_marker("left_wrist_marker", (0.05, 0.35, 1.0), radius * 1.9)
+        self.left_handle_marker = self._add_marker("left_handle_marker", (0.05, 0.35, 1.0), radius * 1.9)
+        self.right_wrist_marker = self._add_marker("right_wrist_marker", (1.0, 0.18, 0.08), radius * 1.9)
+        self.right_handle_marker = self._add_marker("right_handle_marker", (1.0, 0.18, 0.08), radius * 1.9)
+
+    def _add_connector(self, name, color, radius):
+        cylinder = UsdGeom.Cylinder.Define(self.stage, f"{self.root_path}/{name}")
+        cylinder.CreateAxisAttr("Z")
+        cylinder.CreateRadiusAttr(radius)
+        height_attr = cylinder.CreateHeightAttr(0.001)
+        gprim = UsdGeom.Gprim(cylinder.GetPrim())
+        gprim.CreateDisplayColorPrimvar(UsdGeom.Tokens.constant).Set([Gf.Vec3f(*color)])
+
+        xform = UsdGeom.Xformable(cylinder.GetPrim())
+        xform.ClearXformOpOrder()
+        translate_op = xform.AddTranslateOp()
+        orient_op = xform.AddOrientOp(UsdGeom.XformOp.PrecisionDouble)
+        return {"height": height_attr, "translate": translate_op, "orient": orient_op}
+
+    def _add_marker(self, name, color, radius):
+        sphere = UsdGeom.Sphere.Define(self.stage, f"{self.root_path}/{name}")
+        sphere.CreateRadiusAttr(radius)
+        gprim = UsdGeom.Gprim(sphere.GetPrim())
+        gprim.CreateDisplayColorPrimvar(UsdGeom.Tokens.constant).Set([Gf.Vec3f(*color)])
+
+        xform = UsdGeom.Xformable(sphere.GetPrim())
+        xform.ClearXformOpOrder()
+        return xform.AddTranslateOp()
+
+    def update(self, left_wrist: torch.Tensor, left_handle: torch.Tensor, right_wrist: torch.Tensor, right_handle: torch.Tensor):
+        self._update_connector(self.left, left_wrist, left_handle)
+        self._update_connector(self.right, right_wrist, right_handle)
+        self.left_wrist_marker.Set(_tensor_to_vec3d(left_wrist))
+        self.left_handle_marker.Set(_tensor_to_vec3d(left_handle))
+        self.right_wrist_marker.Set(_tensor_to_vec3d(right_wrist))
+        self.right_handle_marker.Set(_tensor_to_vec3d(right_handle))
+
+    def _update_connector(self, connector, start: torch.Tensor, end: torch.Tensor):
+        start_vec = _tensor_to_vec3d(start)
+        end_vec = _tensor_to_vec3d(end)
+        delta = end_vec - start_vec
+        length = max(delta.GetLength(), 1.0e-4)
+        direction = delta / length
+        midpoint = Gf.Vec3d(
+            (start_vec[0] + end_vec[0]) * 0.5,
+            (start_vec[1] + end_vec[1]) * 0.5,
+            (start_vec[2] + end_vec[2]) * 0.5,
+        )
+        connector["height"].Set(length)
+        connector["translate"].Set(midpoint)
+        connector["orient"].Set(Gf.Rotation(Gf.Vec3d(0.0, 0.0, 1.0), direction).GetQuat())
+
 
 def _quat_wxyz_to_yaw(quat: torch.Tensor) -> float:
     w, x, y, z = [float(v) for v in quat]
     return math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+
+
+def _tensor_to_vec3d(values: torch.Tensor) -> Gf.Vec3d:
+    values = values.detach().cpu()
+    return Gf.Vec3d(float(values[0]), float(values[1]), float(values[2]))
+
+
+def _find_body_index(robot, body_name: str) -> int:
+    if hasattr(robot, "find_bodies"):
+        indices, _ = robot.find_bodies(body_name)
+        if len(indices) > 0:
+            return int(indices[0])
+
+    for names in (
+        getattr(robot, "body_names", None),
+        getattr(getattr(robot, "data", None), "body_names", None),
+        getattr(robot, "_body_names", None),
+    ):
+        if names and body_name in names:
+            return names.index(body_name)
+
+    raise ValueError(f"Could not find robot body '{body_name}'.")
 
 
 def _set_fixed_command(env):
@@ -252,9 +366,24 @@ def main():
         obs, _ = env.get_observations()
 
     robot = base_env.unwrapped.scene["robot"]
+    hand_connectors = None
+    left_wrist_body_idx = None
+    right_wrist_body_idx = None
+    if not args_cli.hide_hand_connectors:
+        hand_connectors = HandHandleConnectors(radius=args_cli.hand_connector_radius)
+        left_wrist_body_idx = _find_body_index(robot, "left_wrist_yaw_link")
+        right_wrist_body_idx = _find_body_index(robot, "right_wrist_yaw_link")
     initial_root_pos = robot.data.root_pos_w[0, :2].detach().clone()
     _set_fixed_command(base_env)
     chair_pos, yaw = wheelchair.update_from_robot(robot, args_cli.wheelchair_forward_offset)
+    if hand_connectors is not None:
+        left_handle, right_handle = wheelchair.handle_positions_world(chair_pos, yaw)
+        hand_connectors.update(
+            robot.data.body_pos_w[0, left_wrist_body_idx],
+            left_handle,
+            robot.data.body_pos_w[0, right_wrist_body_idx],
+            right_handle,
+        )
     _set_demo_camera(base_env, chair_pos, yaw)
 
     timestep = 0
@@ -263,6 +392,14 @@ def main():
         with torch.inference_mode():
             _set_fixed_command(base_env)
             chair_pos, yaw = wheelchair.update_from_robot(robot, args_cli.wheelchair_forward_offset)
+            if hand_connectors is not None:
+                left_handle, right_handle = wheelchair.handle_positions_world(chair_pos, yaw)
+                hand_connectors.update(
+                    robot.data.body_pos_w[0, left_wrist_body_idx],
+                    left_handle,
+                    robot.data.body_pos_w[0, right_wrist_body_idx],
+                    right_handle,
+                )
             _set_demo_camera(base_env, chair_pos, yaw)
             actions = policy(obs)
             obs, _, _, _ = env.step(actions)
