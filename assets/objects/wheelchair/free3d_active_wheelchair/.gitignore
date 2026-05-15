@@ -1,0 +1,15 @@
+/source/*.rar
+/source/*.zip
+/source/*.7z
+/extracted/
+/visual/*.obj
+/visual/*.mtl
+/visual/*.3ds
+/visual/*.3DS
+/visual/*.max
+/visual/*.jpg
+/visual/*.JPG
+/visual/*.jpeg
+/visual/*.png
+/visual/*.bmp
+/visual/*.dds
