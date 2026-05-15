@@ -88,27 +88,29 @@ class Sprint10msCurriculumResumePPORunnerCfg(BasePPORunnerCfg):
 
 @configclass
 class Sprint10msGaitRobotEnvCfg(Sprint10msRobotEnvCfg):
-    """Sprint variant that gives the policy more room to learn a running gait."""
+    """Straight sprint variant that gives the policy more room to learn a running gait."""
 
     def __post_init__(self):
         super().__post_init__()
 
+        self.commands.base_velocity.rel_standing_envs = 0.0
+        self.commands.base_velocity.rel_heading_envs = 0.0
         self.commands.base_velocity.ranges = mdp.UniformLevelVelocityCommandCfg.Ranges(
-            lin_vel_x=(2.0, 4.0),
-            lin_vel_y=(-0.05, 0.05),
-            ang_vel_z=(-0.05, 0.05),
+            lin_vel_x=(5.5, 6.0),
+            lin_vel_y=(0.0, 0.0),
+            ang_vel_z=(0.0, 0.0),
         )
         self.commands.base_velocity.limit_ranges = mdp.UniformLevelVelocityCommandCfg.Ranges(
-            lin_vel_x=(2.0, 10.0),
-            lin_vel_y=(-0.10, 0.10),
-            ang_vel_z=(-0.15, 0.15),
+            lin_vel_x=(5.5, 10.0),
+            lin_vel_y=(0.0, 0.0),
+            ang_vel_z=(0.0, 0.0),
         )
 
         self.rewards.joint_deviation_waists.weight = -0.20
         self.rewards.joint_deviation_legs.weight = -0.35
         self.rewards.track_lin_vel_xy.weight = 2.25
         self.rewards.track_lin_vel_xy.params["std"] = math.sqrt(0.49)
-        self.rewards.track_ang_vel_z.weight = 0.08
+        self.rewards.track_ang_vel_z.weight = 0.20
 
         self.rewards.gait.weight = 0.35
         self.rewards.gait.params["period"] = 0.38
@@ -143,7 +145,11 @@ class Sprint10msGaitRobotPlayEnvCfg(Sprint10msGaitRobotEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         self.scene.num_envs = 10
-        self.commands.base_velocity.ranges = self.commands.base_velocity.limit_ranges
+        self.commands.base_velocity.ranges = mdp.UniformLevelVelocityCommandCfg.Ranges(
+            lin_vel_x=(5.5, 6.0),
+            lin_vel_y=(0.0, 0.0),
+            ang_vel_z=(0.0, 0.0),
+        )
 
 
 @configclass
