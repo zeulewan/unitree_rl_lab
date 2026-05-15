@@ -19,7 +19,21 @@ import cli_args  # isort: skip
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
+parser.add_argument("--video-start-step", type=int, default=0, help="Simulation step to start the recorded video.")
 parser.add_argument("--video-follow-robot", action="store_true", default=False, help="Track the first robot in recorded videos.")
+parser.add_argument("--video-follow-env-index", type=int, default=0, help="Environment index to track in recorded videos.")
+parser.add_argument(
+    "--video-follow-best-robot",
+    action="store_true",
+    default=False,
+    help="Track the robot with the most XY displacement after --video-follow-best-after-steps.",
+)
+parser.add_argument(
+    "--video-follow-best-after-steps",
+    type=int,
+    default=50,
+    help="Number of steps before selecting the best moving robot for video follow.",
+)
 parser.add_argument(
     "--video-camera-eye-offset",
     type=float,
@@ -84,13 +98,33 @@ import unitree_rl_lab.tasks  # noqa: F401
 from unitree_rl_lab.utils.parser_cfg import parse_env_cfg
 
 
-def _set_follow_camera(env):
-    """Point the render camera at the first robot for useful recorded videos."""
+def _set_follow_camera(env, timestep: int = 0):
+    """Point the render camera at a selected robot for useful recorded videos."""
     if not args_cli.video_follow_robot:
         return
     try:
         robot = env.unwrapped.scene["robot"]
-        root_pos = robot.data.root_pos_w[0].detach().cpu()
+        root_pos_w = robot.data.root_pos_w.detach()
+        if not hasattr(_set_follow_camera, "_initial_root_xy"):
+            _set_follow_camera._initial_root_xy = root_pos_w[:, :2].clone()
+            _set_follow_camera._selected_env_index = max(
+                0, min(args_cli.video_follow_env_index, root_pos_w.shape[0] - 1)
+            )
+        if (
+            args_cli.video_follow_best_robot
+            and not getattr(_set_follow_camera, "_selected_best_robot", False)
+            and timestep >= args_cli.video_follow_best_after_steps
+        ):
+            displacement = torch.linalg.norm(root_pos_w[:, :2] - _set_follow_camera._initial_root_xy, dim=1)
+            _set_follow_camera._selected_env_index = int(torch.argmax(displacement).item())
+            _set_follow_camera._selected_best_robot = True
+            print(
+                "[INFO] Video follow selected env "
+                f"{_set_follow_camera._selected_env_index} "
+                f"(XY displacement {displacement[_set_follow_camera._selected_env_index].item():.3f} m)"
+            )
+        env_index = max(0, min(_set_follow_camera._selected_env_index, root_pos_w.shape[0] - 1))
+        root_pos = root_pos_w[env_index].cpu()
         eye_offset = torch.tensor(args_cli.video_camera_eye_offset)
         target_offset = torch.tensor(args_cli.video_camera_target_offset)
         env.unwrapped.sim.set_camera_view((root_pos + eye_offset).tolist(), (root_pos + target_offset).tolist())
@@ -141,7 +175,7 @@ def main():
     if args_cli.video:
         video_kwargs = {
             "video_folder": os.path.join(log_dir, "videos", "play"),
-            "step_trigger": lambda step: step == 0,
+            "step_trigger": lambda step: step == args_cli.video_start_step,
             "video_length": args_cli.video_length,
             "disable_logger": True,
         }
@@ -195,7 +229,7 @@ def main():
     obs = env.get_observations()
     if version("rsl-rl-lib").startswith("2.3."):
         obs, _ = env.get_observations()
-    _set_follow_camera(base_env)
+    _set_follow_camera(base_env, timestep=0)
     timestep = 0
     # simulate environment
     while simulation_app.is_running():
@@ -204,13 +238,13 @@ def main():
         with torch.inference_mode():
             # agent stepping
             actions = policy(obs)
-            _set_follow_camera(base_env)
+            _set_follow_camera(base_env, timestep=timestep)
             # env stepping
             obs, _, _, _ = env.step(actions)
         if args_cli.video:
             timestep += 1
             # Exit the play loop after recording one video
-            if timestep == args_cli.video_length:
+            if timestep >= args_cli.video_start_step + args_cli.video_length:
                 break
 
         # time delay for real-time evaluation
