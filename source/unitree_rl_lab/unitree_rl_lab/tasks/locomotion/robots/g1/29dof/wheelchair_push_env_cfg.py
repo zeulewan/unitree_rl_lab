@@ -715,7 +715,7 @@ class DynamicWheelchairStandingAttachedRobotEnvCfg(DynamicWheelchairPushAttached
         self.rewards.base_angular_velocity.weight = -0.2
         self.rewards.joint_vel.weight = -0.002
         self.rewards.joint_acc.weight = -1.0e-6
-        self.rewards.action_rate.weight = -0.2
+        self.rewards.action_rate.weight = 0.0
         self.rewards.joint_deviation_waists.weight = -1.0
         self.rewards.joint_deviation_legs.weight = -1.5
         self.rewards.flat_orientation_l2.weight = -8.0
@@ -753,3 +753,17 @@ class DynamicWheelchairStandingAttachedRobotPlayEnvCfg(DynamicWheelchairStanding
 class DynamicWheelchairStandingAttachedPPORunnerCfg(DynamicWheelchairPushObservedPPORunnerCfg):
     experiment_name = "unitree_g1_29dof_wheelchair_dynamic_stand_attached"
     max_iterations = 1500
+    algorithm = RslRlPpoAlgorithmCfg(
+        value_loss_coef=1.0,
+        use_clipped_value_loss=True,
+        clip_param=0.05,
+        entropy_coef=0.001,
+        num_learning_epochs=1,
+        num_mini_batches=4,
+        learning_rate=3.0e-5,
+        schedule="adaptive",
+        gamma=0.99,
+        lam=0.95,
+        desired_kl=0.002,
+        max_grad_norm=0.25,
+    )
