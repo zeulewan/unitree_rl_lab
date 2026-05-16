@@ -39,6 +39,19 @@ def stand_still(
     return reward * (cmd_norm < 0.1)
 
 
+def joint_position_l1(
+    env: ManagerBasedRLEnv,
+    target: float = 0.0,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalize selected joints away from an explicit target position."""
+
+    asset: Articulation = env.scene[asset_cfg.name]
+    joint_pos = asset.data.joint_pos[:, asset_cfg.joint_ids]
+    target_tensor = torch.as_tensor(target, dtype=joint_pos.dtype, device=joint_pos.device)
+    return torch.sum(torch.abs(joint_pos - target_tensor), dim=1)
+
+
 def _body_positions_in_root_frame(asset: Articulation, body_ids: list[int]) -> torch.Tensor:
     body_pos_w = asset.data.body_pos_w[:, body_ids, :]
     body_pos_translated = body_pos_w - asset.data.root_pos_w[:, None, :]

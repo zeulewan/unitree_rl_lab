@@ -450,9 +450,10 @@ class DynamicWheelchairPushRewardsCfg(WheelchairPushRewardsCfg):
     )
 
     wrist_joint_deviation = RewTerm(
-        func=mdp.joint_deviation_l1,
+        func=mdp.joint_position_l1,
         weight=-0.25,
         params={
+            "target": 0.0,
             "asset_cfg": SceneEntityCfg(
                 "robot",
                 joint_names=[
@@ -1011,12 +1012,14 @@ class FixedBaseRelaxedWheelchairStandingAttachedRobotEnvCfg(
     def __post_init__(self):
         super().__post_init__()
         self.events.attach_wheelchair_hands.params["mask_collisions"] = False
+        self.actions.JointPositionAction.scale[".*_wrist_.*"] = 0.015
         self.rewards.wheelchair_track_forward_velocity.weight = 0.0
         self.rewards.wheelchair_lateral_velocity.weight = 0.0
         self.rewards.wheelchair_yaw_velocity.weight = 0.0
         self.rewards.wheelchair_tilt.weight = 0.0
         self.rewards.wheelchair_xy_velocity.weight = 0.0
         self.rewards.wheelchair_invalid_contact.weight = 0.0
+        self.rewards.wrist_joint_deviation.weight = -0.25
 
 
 @configclass
