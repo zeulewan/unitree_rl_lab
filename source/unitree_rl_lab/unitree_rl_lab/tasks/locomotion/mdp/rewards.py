@@ -4,8 +4,9 @@ import torch
 from typing import TYPE_CHECKING
 
 try:
-    from isaaclab.utils.math import quat_apply_inverse
+    from isaaclab.utils.math import quat_apply, quat_apply_inverse
 except ImportError:
+    from isaaclab.utils.math import quat_rotate as quat_apply
     from isaaclab.utils.math import quat_rotate_inverse as quat_apply_inverse
 from isaaclab.assets import Articulation, RigidObject
 from isaaclab.managers import SceneEntityCfg
@@ -45,6 +46,14 @@ def _body_positions_in_root_frame(asset: Articulation, body_ids: list[int]) -> t
     for body_index in range(body_pos_translated.shape[1]):
         body_pos_b[:, body_index, :] = quat_apply_inverse(asset.data.root_quat_w, body_pos_translated[:, body_index, :])
     return body_pos_b
+
+
+def _body_axis_in_world(asset: Articulation, body_ids: list[int], axis: list[float]) -> torch.Tensor:
+    body_quat_w = asset.data.body_quat_w[:, body_ids, :]
+    axis_b = torch.tensor(axis, device=body_quat_w.device, dtype=body_quat_w.dtype)
+    axis_b = axis_b.expand(body_quat_w.shape[0], body_quat_w.shape[1], 3)
+    axis_w = quat_apply(body_quat_w.reshape(-1, 4), axis_b.reshape(-1, 3))
+    return axis_w.reshape(body_quat_w.shape[0], body_quat_w.shape[1], 3)
 
 
 def hand_handle_position_error_exp(
@@ -104,6 +113,21 @@ def dynamic_hand_handle_position_error_l2(
     hand_pos_w = robot.data.body_pos_w[:, robot_cfg.body_ids, :]
     handle_pos_w = wheelchair.data.body_pos_w[:, wheelchair_cfg.body_ids, :]
     return torch.mean(torch.sum(torch.square(hand_pos_w - handle_pos_w), dim=-1), dim=-1)
+
+
+def dynamic_hand_handle_axis_alignment_l2(
+    env: ManagerBasedRLEnv,
+    axis: list[float],
+    robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    wheelchair_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+) -> torch.Tensor:
+    """Penalize selected hand bodies being perpendicular to wheelchair handle frames."""
+    robot: Articulation = env.scene[robot_cfg.name]
+    wheelchair: Articulation = env.scene[wheelchair_cfg.name]
+    hand_axis_w = _body_axis_in_world(robot, robot_cfg.body_ids, axis)
+    handle_axis_w = _body_axis_in_world(wheelchair, wheelchair_cfg.body_ids, axis)
+    alignment = torch.sum(hand_axis_w * handle_axis_w, dim=-1).abs().clamp(max=1.0)
+    return torch.mean(1.0 - alignment, dim=-1)
 
 
 def wheelchair_forward_velocity_exp(

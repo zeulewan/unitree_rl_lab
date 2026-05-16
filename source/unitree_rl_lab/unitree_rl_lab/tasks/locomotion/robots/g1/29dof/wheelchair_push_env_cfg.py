@@ -384,6 +384,34 @@ class DynamicWheelchairPushRewardsCfg(WheelchairPushRewardsCfg):
         },
     )
 
+    hand_handle_axis_alignment = RewTerm(
+        func=mdp.dynamic_hand_handle_axis_alignment_l2,
+        weight=-0.5,
+        params={
+            "axis": [1.0, 0.0, 0.0],
+            "robot_cfg": SceneEntityCfg(
+                "robot",
+                body_names=DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES,
+            ),
+            "wheelchair_cfg": SceneEntityCfg("wheelchair", body_names=DYNAMIC_WHEELCHAIR_HANDLE_BODY_NAMES),
+        },
+    )
+
+    wrist_joint_deviation = RewTerm(
+        func=mdp.joint_deviation_l1,
+        weight=-0.25,
+        params={
+            "asset_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=[
+                    ".*_wrist_roll_joint",
+                    ".*_wrist_pitch_joint",
+                    ".*_wrist_yaw_joint",
+                ],
+            )
+        },
+    )
+
     wheelchair_invalid_contact = RewTerm(
         func=mdp.filtered_contact_force_penalty,
         weight=-0.02,
