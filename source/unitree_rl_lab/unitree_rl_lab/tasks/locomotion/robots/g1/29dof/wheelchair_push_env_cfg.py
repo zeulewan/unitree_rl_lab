@@ -14,29 +14,33 @@ from .velocity_env_cfg import ObservationsCfg, RewardsCfg, RobotEnvCfg, RobotSce
 
 
 WHEELCHAIR_HANDLE_TARGETS_B = [
-    [0.35, 0.24, 0.18],
-    [0.35, -0.24, 0.18],
+    [0.328, 0.24, 0.12],
+    [0.328, -0.24, 0.12],
 ]
 """Left/right handle-grip targets in the robot root frame, in meters."""
 
 
 WHEELCHAIR_ARM_JOINT_POSE = {
-    "left_shoulder_pitch_joint": -0.53,
-    "left_shoulder_roll_joint": 0.41,
-    "left_shoulder_yaw_joint": 0.06,
-    "left_elbow_joint": 0.57,
+    "left_shoulder_pitch_joint": -0.495,
+    "left_shoulder_roll_joint": 0.374,
+    "left_shoulder_yaw_joint": 0.043,
+    "left_elbow_joint": 0.664,
     "left_wrist_roll_joint": 0.15,
-    "left_wrist_pitch_joint": -0.13,
-    "left_wrist_yaw_joint": 0.02,
-    "right_shoulder_pitch_joint": -0.53,
-    "right_shoulder_roll_joint": -0.41,
-    "right_shoulder_yaw_joint": -0.06,
-    "right_elbow_joint": 0.57,
+    "left_wrist_pitch_joint": -0.088,
+    "left_wrist_yaw_joint": 0.011,
+    "right_shoulder_pitch_joint": -0.495,
+    "right_shoulder_roll_joint": -0.374,
+    "right_shoulder_yaw_joint": -0.043,
+    "right_elbow_joint": 0.664,
     "right_wrist_roll_joint": -0.15,
-    "right_wrist_pitch_joint": -0.13,
-    "right_wrist_yaw_joint": -0.02,
+    "right_wrist_pitch_joint": -0.088,
+    "right_wrist_yaw_joint": -0.011,
 }
 """Warm-start arm pose placing the rubber hand bodies near the wheelchair handle targets."""
+
+
+DYNAMIC_WHEELCHAIR_INIT_POS = (0.728, 0.0, 0.0)
+"""Wheelchair root pose that aligns the URDF handle frames with the G1 rubber-hand start pose."""
 
 
 DYNAMIC_WHEELCHAIR_HANDLE_BODY_NAMES = [
@@ -263,7 +267,7 @@ class DynamicWheelchairPushSceneCfg(RobotSceneCfg):
     """Flat locomotion scene with a passive manual wheelchair articulation."""
 
     wheelchair = ACTIVE_MANUAL_WHEELCHAIR_CFG.replace(prim_path="{ENV_REGEX_NS}/Wheelchair")
-    wheelchair.init_state.pos = (0.75, 0.0, 0.0)
+    wheelchair.init_state.pos = DYNAMIC_WHEELCHAIR_INIT_POS
 
     wheelchair_left_handle_robot_contact = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Wheelchair/left_handle_frame",
