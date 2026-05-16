@@ -174,6 +174,49 @@ def wheelchair_forward_line_l2(
     return torch.square(lateral_error)
 
 
+def root_xy_position_l2(
+    env: ManagerBasedRLEnv,
+    target_xy: list[float],
+    allowed_error: float = 0.0,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+) -> torch.Tensor:
+    """Penalize an articulation root drifting from a target XY offset in each env."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    target_xy_tensor = torch.tensor(target_xy, device=env.device, dtype=asset.data.root_pos_w.dtype).unsqueeze(0)
+    target_xy_w = env.scene.env_origins[:, :2] + target_xy_tensor
+    position_error = torch.linalg.norm(asset.data.root_pos_w[:, :2] - target_xy_w, dim=-1)
+    position_error = torch.clamp(position_error - allowed_error, min=0.0)
+    return torch.square(position_error)
+
+
+def root_height_l2(
+    env: ManagerBasedRLEnv,
+    target_height: float,
+    allowed_error: float = 0.0,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+) -> torch.Tensor:
+    """Penalize an articulation root drifting from a target world Z height."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    height_error = torch.abs(asset.data.root_pos_w[:, 2] - (env.scene.env_origins[:, 2] + target_height))
+    height_error = torch.clamp(height_error - allowed_error, min=0.0)
+    return torch.square(height_error)
+
+
+def root_heading_lateral_l2(
+    env: ManagerBasedRLEnv,
+    allowed_error: float = 0.0,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+) -> torch.Tensor:
+    """Penalize yaw drift from the world-X heading using the root forward axis."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    x_axis_b = torch.tensor([1.0, 0.0, 0.0], device=env.device, dtype=asset.data.root_quat_w.dtype).expand(
+        env.num_envs, 3
+    )
+    x_axis_w = quat_apply(asset.data.root_quat_w, x_axis_b)
+    heading_error = torch.clamp(torch.abs(x_axis_w[:, 1]) - allowed_error, min=0.0)
+    return torch.square(heading_error)
+
+
 def wheelchair_yaw_velocity_l2(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),

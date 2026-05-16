@@ -7,6 +7,7 @@ from isaaclab.utils import configclass
 from isaaclab_rl.rsl_rl import RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
 
 from unitree_rl_lab.assets.objects.wheelchair import (
+    ACTIVE_MANUAL_WHEELCHAIR_BRAKED_CFG,
     ACTIVE_MANUAL_WHEELCHAIR_CFG,
     ACTIVE_MANUAL_WHEELCHAIR_FIXED_BASE_CFG,
 )
@@ -337,6 +338,14 @@ class FixedBaseDynamicWheelchairPushSceneCfg(DynamicWheelchairPushSceneCfg):
     """Wheelchair scene with the chair root fixed for first attached-hands standing."""
 
     wheelchair = ACTIVE_MANUAL_WHEELCHAIR_FIXED_BASE_CFG.replace(prim_path="{ENV_REGEX_NS}/Wheelchair")
+    wheelchair.init_state.pos = DYNAMIC_WHEELCHAIR_INIT_POS
+
+
+@configclass
+class BrakedDynamicWheelchairPushSceneCfg(DynamicWheelchairPushSceneCfg):
+    """Wheelchair scene with passive wheel/caster braking but a free root."""
+
+    wheelchair = ACTIVE_MANUAL_WHEELCHAIR_BRAKED_CFG.replace(prim_path="{ENV_REGEX_NS}/Wheelchair")
     wheelchair.init_state.pos = DYNAMIC_WHEELCHAIR_INIT_POS
 
 
@@ -702,6 +711,32 @@ class DynamicWheelchairStandingAttachedRewardsCfg(DynamicWheelchairPushRewardsCf
         params={"asset_cfg": SceneEntityCfg("wheelchair")},
     )
 
+    wheelchair_root_position = RewTerm(
+        func=mdp.root_xy_position_l2,
+        weight=0.0,
+        params={
+            "target_xy": [DYNAMIC_WHEELCHAIR_INIT_POS[0], DYNAMIC_WHEELCHAIR_INIT_POS[1]],
+            "allowed_error": 0.03,
+            "asset_cfg": SceneEntityCfg("wheelchair"),
+        },
+    )
+
+    wheelchair_root_height = RewTerm(
+        func=mdp.root_height_l2,
+        weight=0.0,
+        params={
+            "target_height": DYNAMIC_WHEELCHAIR_INIT_POS[2],
+            "allowed_error": 0.01,
+            "asset_cfg": SceneEntityCfg("wheelchair"),
+        },
+    )
+
+    wheelchair_root_heading = RewTerm(
+        func=mdp.root_heading_lateral_l2,
+        weight=0.0,
+        params={"allowed_error": 0.03, "asset_cfg": SceneEntityCfg("wheelchair")},
+    )
+
 
 def _configure_dynamic_wheelchair_standing_pretrain(env_cfg):
     """Apply zero-motion standing settings shared by observed and attached stand pretrains."""
@@ -885,6 +920,53 @@ class FixedBaseDynamicWheelchairStandingAttachedRobotEnvCfg(DynamicWheelchairSta
 
 
 @configclass
+class StationaryDynamicWheelchairStandingAttachedRobotEnvCfg(DynamicWheelchairStandingAttachedRobotEnvCfg):
+    """Hands attached to a free wheelchair, biased to keep the chair stationary."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.rewards.wheelchair_track_forward_velocity.weight = 5.0
+        self.rewards.wheelchair_track_forward_velocity.params["std"] = 0.05
+        self.rewards.wheelchair_forward_progress.weight = 0.0
+        self.rewards.wheelchair_lateral_velocity.weight = -12.0
+        self.rewards.wheelchair_forward_line.weight = -10.0
+        self.rewards.wheelchair_yaw_velocity.weight = -6.0
+        self.rewards.wheelchair_tilt.weight = -20.0
+        self.rewards.wheelchair_wheel_ground_height.weight = -120.0
+        self.rewards.wheelchair_xy_velocity.weight = -12.0
+        self.rewards.wheelchair_root_position.weight = -60.0
+        self.rewards.wheelchair_root_height.weight = -40.0
+        self.rewards.wheelchair_root_heading.weight = -20.0
+
+
+@configclass
+class BrakedStationaryDynamicWheelchairStandingAttachedRobotEnvCfg(
+    StationaryDynamicWheelchairStandingAttachedRobotEnvCfg
+):
+    """Hands attached to a braked, free wheelchair with stationary rewards."""
+
+    scene: BrakedDynamicWheelchairPushSceneCfg = BrakedDynamicWheelchairPushSceneCfg(num_envs=2048, env_spacing=4.0)
+
+
+@configclass
+class BrakedStationaryDynamicWheelchairStandingAttachedRobotPlayEnvCfg(
+    BrakedStationaryDynamicWheelchairStandingAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class StationaryDynamicWheelchairStandingAttachedRobotPlayEnvCfg(
+    StationaryDynamicWheelchairStandingAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
 class FixedBaseDynamicWheelchairStandingAttachedRobotPlayEnvCfg(FixedBaseDynamicWheelchairStandingAttachedRobotEnvCfg):
     def __post_init__(self):
         super().__post_init__()
@@ -929,3 +1011,15 @@ class DynamicWheelchairStandingAttachedPPORunnerCfg(DynamicWheelchairPushObserve
 @configclass
 class FixedBaseDynamicWheelchairStandingAttachedPPORunnerCfg(DynamicWheelchairStandingAttachedPPORunnerCfg):
     experiment_name = "unitree_g1_29dof_wheelchair_fixed_stand_attached"
+
+
+@configclass
+class StationaryDynamicWheelchairStandingAttachedPPORunnerCfg(DynamicWheelchairStandingAttachedPPORunnerCfg):
+    experiment_name = "unitree_g1_29dof_wheelchair_stationary_stand_attached"
+
+
+@configclass
+class BrakedStationaryDynamicWheelchairStandingAttachedPPORunnerCfg(
+    DynamicWheelchairStandingAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_braked_stationary_stand_attached"

@@ -34,6 +34,17 @@ gym.register(
 )
 
 gym.register(
+    id="Unitree-G1-29dof-Stand-Handle-Arms",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.standing_env_cfg:StandingHandleArmsRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.standing_env_cfg:StandingHandleArmsRobotPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.standing_env_cfg:StandingHandleArmsPPORunnerCfg",
+    },
+)
+
+gym.register(
     id="Unitree-G1-29dof-Running-Fast",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
@@ -140,6 +151,28 @@ gym.register(
         "env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:FixedBaseDynamicWheelchairStandingAttachedRobotEnvCfg",
         "play_env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:FixedBaseDynamicWheelchairStandingAttachedRobotPlayEnvCfg",
         "rsl_rl_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:FixedBaseDynamicWheelchairStandingAttachedPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Unitree-G1-29dof-Wheelchair-Stationary-Stand-Attached",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:StationaryDynamicWheelchairStandingAttachedRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:StationaryDynamicWheelchairStandingAttachedRobotPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:StationaryDynamicWheelchairStandingAttachedPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Unitree-G1-29dof-Wheelchair-Braked-Stationary-Stand-Attached",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:BrakedStationaryDynamicWheelchairStandingAttachedRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:BrakedStationaryDynamicWheelchairStandingAttachedRobotPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:BrakedStationaryDynamicWheelchairStandingAttachedPPORunnerCfg",
     },
 )
 

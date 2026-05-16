@@ -63,3 +63,12 @@ ACTIVE_MANUAL_WHEELCHAIR_CFG = ArticulationCfg(
 
 ACTIVE_MANUAL_WHEELCHAIR_FIXED_BASE_CFG = copy.deepcopy(ACTIVE_MANUAL_WHEELCHAIR_CFG)
 ACTIVE_MANUAL_WHEELCHAIR_FIXED_BASE_CFG.spawn.fix_base = True
+
+ACTIVE_MANUAL_WHEELCHAIR_BRAKED_CFG = copy.deepcopy(ACTIVE_MANUAL_WHEELCHAIR_CFG)
+ACTIVE_MANUAL_WHEELCHAIR_BRAKED_CFG.spawn.rigid_props.linear_damping = 0.5
+ACTIVE_MANUAL_WHEELCHAIR_BRAKED_CFG.spawn.rigid_props.angular_damping = 0.5
+ACTIVE_MANUAL_WHEELCHAIR_BRAKED_CFG.spawn.joint_drive.target_type = "velocity"
+ACTIVE_MANUAL_WHEELCHAIR_BRAKED_CFG.spawn.joint_drive.gains = sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(
+    stiffness=4.0,
+    damping=0.0,
+)

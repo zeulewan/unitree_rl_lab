@@ -9,6 +9,25 @@ from unitree_rl_lab.tasks.locomotion import mdp
 from .velocity_env_cfg import RewardsCfg, RobotEnvCfg
 
 
+HANDLE_ARM_JOINT_POSE = {
+    "left_shoulder_pitch_joint": -0.495,
+    "left_shoulder_roll_joint": 0.374,
+    "left_shoulder_yaw_joint": 0.043,
+    "left_elbow_joint": 0.664,
+    "left_wrist_roll_joint": 0.15,
+    "left_wrist_pitch_joint": -0.088,
+    "left_wrist_yaw_joint": 0.011,
+    "right_shoulder_pitch_joint": -0.495,
+    "right_shoulder_roll_joint": -0.374,
+    "right_shoulder_yaw_joint": -0.043,
+    "right_elbow_joint": 0.664,
+    "right_wrist_roll_joint": -0.15,
+    "right_wrist_pitch_joint": -0.088,
+    "right_wrist_yaw_joint": -0.011,
+}
+"""Arm pose used before attaching the hands to wheelchair handles."""
+
+
 @configclass
 class StandingRewardsCfg(RewardsCfg):
     """Reward terms for a zero-command standing pretrain."""
@@ -101,6 +120,24 @@ class StandingRobotPlayEnvCfg(StandingRobotEnvCfg):
 
 
 @configclass
+class StandingHandleArmsRobotEnvCfg(StandingRobotEnvCfg):
+    """Zero-velocity stand with the wheelchair handle arm pose and no chair support."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.robot.init_state.joint_pos.pop(".*_shoulder_pitch_joint", None)
+        self.scene.robot.init_state.joint_pos.pop(".*_elbow_joint", None)
+        self.scene.robot.init_state.joint_pos.update(HANDLE_ARM_JOINT_POSE)
+
+
+@configclass
+class StandingHandleArmsRobotPlayEnvCfg(StandingHandleArmsRobotEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
 class StandingPPORunnerCfg(BasePPORunnerCfg):
     num_steps_per_env = 48
     max_iterations = 1500
@@ -127,3 +164,8 @@ class StandingPPORunnerCfg(BasePPORunnerCfg):
         desired_kl=0.0002,
         max_grad_norm=0.05,
     )
+
+
+@configclass
+class StandingHandleArmsPPORunnerCfg(StandingPPORunnerCfg):
+    experiment_name = "unitree_g1_29dof_stand_handle_arms"
