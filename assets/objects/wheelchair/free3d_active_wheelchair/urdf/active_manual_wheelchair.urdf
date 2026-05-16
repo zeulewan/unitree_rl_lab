@@ -32,13 +32,13 @@
     <collision name="seat_collision">
       <origin xyz="0.05 0.00 0.48" rpy="0 0 0"/>
       <geometry>
-        <box size="0.48 0.46 0.08"/>
+        <box size="0.48 0.38 0.08"/>
       </geometry>
     </collision>
     <collision name="backrest_collision">
       <origin xyz="-0.34 0.00 0.72" rpy="0 0 0"/>
       <geometry>
-        <box size="0.07 0.50 0.44"/>
+        <box size="0.07 0.32 0.44"/>
       </geometry>
     </collision>
     <collision name="front_frame_collision">
@@ -190,7 +190,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <box size="0.18 0.055 0.055"/>
+        <box size="0.12 0.04 0.04"/>
       </geometry>
     </collision>
   </link>
@@ -204,7 +204,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <box size="0.18 0.055 0.055"/>
+        <box size="0.12 0.04 0.04"/>
       </geometry>
     </collision>
   </link>
