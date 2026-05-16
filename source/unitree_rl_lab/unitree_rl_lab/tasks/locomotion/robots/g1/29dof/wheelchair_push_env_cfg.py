@@ -949,8 +949,75 @@ class BrakedStationaryDynamicWheelchairStandingAttachedRobotEnvCfg(
 
 
 @configclass
+class RelaxedBrakedDynamicWheelchairStandingAttachedRobotEnvCfg(DynamicWheelchairStandingAttachedRobotEnvCfg):
+    """Hands attached to a braked free wheelchair with relaxed first-stage balance rewards."""
+
+    scene: BrakedDynamicWheelchairPushSceneCfg = BrakedDynamicWheelchairPushSceneCfg(num_envs=2048, env_spacing=4.0)
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.actions.JointPositionAction.scale = {
+            ".*_hip_.*|waist_.*|.*_knee_joint|.*_ankle_.*": 0.12,
+            ".*_shoulder_.*|.*_elbow_joint": 0.05,
+            ".*_wrist_.*": 0.03,
+        }
+
+        self.rewards.base_linear_velocity.weight = -1.0
+        self.rewards.base_angular_velocity.weight = -0.1
+        self.rewards.joint_deviation_arms.weight = -0.02
+        self.rewards.joint_deviation_legs.weight = -1.0
+        self.rewards.robot_xy_velocity.weight = -0.8
+        self.rewards.robot_yaw_velocity.weight = -0.2
+
+        self.rewards.wheelchair_track_forward_velocity.weight = 0.5
+        self.rewards.wheelchair_track_forward_velocity.params["std"] = 0.2
+        self.rewards.wheelchair_forward_progress.weight = 0.0
+        self.rewards.wheelchair_lateral_velocity.weight = -0.5
+        self.rewards.wheelchair_forward_line.weight = 0.0
+        self.rewards.wheelchair_yaw_velocity.weight = -0.3
+        self.rewards.wheelchair_tilt.weight = -2.0
+        self.rewards.wheelchair_wheel_ground_height.weight = 0.0
+        self.rewards.wheelchair_xy_velocity.weight = -0.5
+        self.rewards.wheelchair_root_position.weight = 0.0
+        self.rewards.wheelchair_root_height.weight = 0.0
+        self.rewards.wheelchair_root_heading.weight = 0.0
+        self.rewards.wheelchair_invalid_contact.weight = -0.01
+        self.rewards.wrist_joint_deviation.weight = -0.05
+
+
+@configclass
+class LeftHandRelaxedBrakedDynamicWheelchairStandingAttachedRobotEnvCfg(
+    RelaxedBrakedDynamicWheelchairStandingAttachedRobotEnvCfg
+):
+    """Diagnostic first stage with only the left hand attached to avoid a two-arm closed chain."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.events.attach_wheelchair_hands.params["attachments"] = [DYNAMIC_WHEELCHAIR_HAND_HANDLE_ATTACHMENTS[0]]
+
+
+@configclass
 class BrakedStationaryDynamicWheelchairStandingAttachedRobotPlayEnvCfg(
     BrakedStationaryDynamicWheelchairStandingAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class RelaxedBrakedDynamicWheelchairStandingAttachedRobotPlayEnvCfg(
+    RelaxedBrakedDynamicWheelchairStandingAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class LeftHandRelaxedBrakedDynamicWheelchairStandingAttachedRobotPlayEnvCfg(
+    LeftHandRelaxedBrakedDynamicWheelchairStandingAttachedRobotEnvCfg
 ):
     def __post_init__(self):
         super().__post_init__()
@@ -1023,3 +1090,17 @@ class BrakedStationaryDynamicWheelchairStandingAttachedPPORunnerCfg(
     DynamicWheelchairStandingAttachedPPORunnerCfg
 ):
     experiment_name = "unitree_g1_29dof_wheelchair_braked_stationary_stand_attached"
+
+
+@configclass
+class RelaxedBrakedDynamicWheelchairStandingAttachedPPORunnerCfg(
+    DynamicWheelchairStandingAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_relaxed_stand_attached"
+
+
+@configclass
+class LeftHandRelaxedBrakedDynamicWheelchairStandingAttachedPPORunnerCfg(
+    DynamicWheelchairStandingAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_left_hand_relaxed_stand_attached"

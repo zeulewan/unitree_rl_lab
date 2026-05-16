@@ -188,6 +188,28 @@ gym.register(
 )
 
 gym.register(
+    id="Unitree-G1-29dof-Wheelchair-Relaxed-Stand-Attached",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:RelaxedBrakedDynamicWheelchairStandingAttachedRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:RelaxedBrakedDynamicWheelchairStandingAttachedRobotPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:RelaxedBrakedDynamicWheelchairStandingAttachedPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Unitree-G1-29dof-Wheelchair-Left-Hand-Relaxed-Stand-Attached",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:LeftHandRelaxedBrakedDynamicWheelchairStandingAttachedRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:LeftHandRelaxedBrakedDynamicWheelchairStandingAttachedRobotPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:LeftHandRelaxedBrakedDynamicWheelchairStandingAttachedPPORunnerCfg",
+    },
+)
+
+gym.register(
     id="Unitree-G1-29dof-Wheelchair-Dynamic-Stand-Observed",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
