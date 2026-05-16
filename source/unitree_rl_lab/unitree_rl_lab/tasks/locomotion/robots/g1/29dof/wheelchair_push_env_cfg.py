@@ -1010,6 +1010,7 @@ class FixedBaseRelaxedWheelchairStandingAttachedRobotEnvCfg(
 
     def __post_init__(self):
         super().__post_init__()
+        self.events.attach_wheelchair_hands.params["mask_collisions"] = False
         self.rewards.wheelchair_track_forward_velocity.weight = 0.0
         self.rewards.wheelchair_lateral_velocity.weight = 0.0
         self.rewards.wheelchair_yaw_velocity.weight = 0.0
