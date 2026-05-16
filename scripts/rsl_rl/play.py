@@ -92,6 +92,18 @@ parser.add_argument(
     help="Exit immediately after --print-hand-handle-offsets.",
 )
 parser.add_argument(
+    "--show-wheelchair-urdf-proxy",
+    action="store_true",
+    default=False,
+    help="Use the playback-only wheelchair URDF that renders the simplified collision/handle proxy.",
+)
+parser.add_argument(
+    "--hide-wheelchair-visuals",
+    action="store_true",
+    default=False,
+    help="Hide the wheelchair visual mesh during playback diagnostics.",
+)
+parser.add_argument(
     "--use_pretrained_checkpoint",
     action="store_true",
     help="Use the pre-trained checkpoint from Nucleus.",
@@ -117,6 +129,7 @@ import math
 import os
 import time
 import torch
+from pathlib import Path
 
 from rsl_rl.runners import OnPolicyRunner
 
@@ -133,6 +146,9 @@ from isaaclab_tasks.utils import get_checkpoint_path
 
 import unitree_rl_lab.tasks  # noqa: F401
 from unitree_rl_lab.utils.parser_cfg import parse_env_cfg
+
+from pxr import UsdGeom
+import omni.usd
 
 
 def _set_follow_camera(env, timestep: int = 0):
@@ -228,6 +244,45 @@ def _print_hand_handle_offsets(env):
         print(f"[WARN] Failed to print hand-handle offsets: {err}", flush=True)
 
 
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "assets" / "objects" / "wheelchair").exists():
+            return parent
+    raise RuntimeError("Could not locate unitree_rl_lab repository root.")
+
+
+def _configure_wheelchair_proxy_visual_asset(env_cfg):
+    """Swap the playback wheelchair to a URDF that renders the simplified proxy model."""
+    proxy_urdf = (
+        _repo_root()
+        / "assets"
+        / "objects"
+        / "wheelchair"
+        / "free3d_active_wheelchair"
+        / "urdf"
+        / "active_manual_wheelchair_proxy_visual.urdf"
+    )
+    wheelchair_cfg = getattr(getattr(env_cfg, "scene", None), "wheelchair", None)
+    spawn_cfg = getattr(wheelchair_cfg, "spawn", None)
+    if spawn_cfg is None or not hasattr(spawn_cfg, "asset_path"):
+        print("[WARN] Could not swap wheelchair asset for URDF proxy visuals.", flush=True)
+        return
+    spawn_cfg.asset_path = str(proxy_urdf)
+    print(f"[INFO] Using wheelchair URDF proxy visual asset: {proxy_urdf}", flush=True)
+
+
+def _hide_wheelchair_visuals(stage):
+    hidden = 0
+    for prim in stage.Traverse():
+        path = str(prim.GetPath())
+        if "/Wheelchair/" in path and "/visuals" in path:
+            imageable = UsdGeom.Imageable(prim)
+            if imageable:
+                imageable.MakeInvisible()
+                hidden += 1
+    print(f"[INFO] Hidden {hidden} wheelchair visual prims for URDF proxy playback.")
+
+
 def main():
     """Play with RSL-RL agent."""
     # parse configuration
@@ -238,6 +293,8 @@ def main():
         use_fabric=not args_cli.disable_fabric,
         entry_point_key="play_env_cfg_entry_point",
     )
+    if args_cli.show_wheelchair_urdf_proxy:
+        _configure_wheelchair_proxy_visual_asset(env_cfg)
     if args_cli.disable_fall_terminations and hasattr(env_cfg, "terminations"):
         for term_name in ("base_height", "bad_orientation"):
             if hasattr(env_cfg.terminations, term_name):
@@ -332,6 +389,15 @@ def main():
     obs = env.get_observations()
     if version("rsl-rl-lib").startswith("2.3."):
         obs, _ = env.get_observations()
+    print(
+        "[INFO] Wheelchair visual diagnostics: "
+        f"hide_visuals={args_cli.hide_wheelchair_visuals}, "
+        f"show_urdf_proxy={args_cli.show_wheelchair_urdf_proxy}",
+        flush=True,
+    )
+    if args_cli.hide_wheelchair_visuals and not args_cli.show_wheelchair_urdf_proxy:
+        stage = omni.usd.get_context().get_stage()
+        _hide_wheelchair_visuals(stage)
     if args_cli.print_hand_handle_offsets:
         _print_hand_handle_offsets(base_env)
         if args_cli.exit_after_offset_print:
