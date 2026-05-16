@@ -68,15 +68,15 @@ def wheelchair_handle_state_b(
     robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     wheelchair_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
 ) -> torch.Tensor:
-    """Wheelchair handle positions and wrist-to-handle errors in the robot root frame."""
+    """Wheelchair handle positions and hand-to-handle errors in the robot root frame."""
     robot: Articulation = env.scene[robot_cfg.name]
     wheelchair: Articulation = env.scene[wheelchair_cfg.name]
 
-    wrist_pos_w = robot.data.body_pos_w[:, robot_cfg.body_ids, :]
+    hand_pos_w = robot.data.body_pos_w[:, robot_cfg.body_ids, :]
     handle_pos_w = wheelchair.data.body_pos_w[:, wheelchair_cfg.body_ids, :]
 
     handle_pos_b = _vectors_in_robot_root_frame(robot, handle_pos_w - robot.data.root_pos_w[:, None, :])
-    handle_error_b = _vectors_in_robot_root_frame(robot, handle_pos_w - wrist_pos_w)
+    handle_error_b = _vectors_in_robot_root_frame(robot, handle_pos_w - hand_pos_w)
     return torch.cat((handle_pos_b.flatten(start_dim=1), handle_error_b.flatten(start_dim=1)), dim=-1)
 
 

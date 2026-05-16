@@ -36,7 +36,7 @@ WHEELCHAIR_ARM_JOINT_POSE = {
     "right_wrist_pitch_joint": -0.13,
     "right_wrist_yaw_joint": -0.02,
 }
-"""Warm-start arm pose placing the wrist-yaw links near the wheelchair handle targets."""
+"""Warm-start arm pose placing the rubber hand bodies near the wheelchair handle targets."""
 
 
 DYNAMIC_WHEELCHAIR_HANDLE_BODY_NAMES = [
@@ -44,6 +44,13 @@ DYNAMIC_WHEELCHAIR_HANDLE_BODY_NAMES = [
     "right_handle_frame",
 ]
 """Left/right wheelchair handle bodies in the passive wheelchair articulation."""
+
+
+DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES = [
+    "left_rubber_hand",
+    "right_rubber_hand",
+]
+"""Left/right G1 hand bodies that should align with the wheelchair handle bodies."""
 
 
 DYNAMIC_WHEELCHAIR_WHEEL_BODY_NAMES = [
@@ -120,17 +127,15 @@ DYNAMIC_WHEELCHAIR_ROBOT_CONTACT_FILTERS = [
 
 
 DYNAMIC_WHEELCHAIR_LEFT_HANDLE_ALLOWED_BODIES = [
-    "left_wrist_yaw_link",
     "left_rubber_hand",
 ]
-"""Robot end-effector bodies allowed to contact the left wheelchair handle."""
+"""Robot hand bodies allowed to contact the left wheelchair handle."""
 
 
 DYNAMIC_WHEELCHAIR_RIGHT_HANDLE_ALLOWED_BODIES = [
-    "right_wrist_yaw_link",
     "right_rubber_hand",
 ]
-"""Robot end-effector bodies allowed to contact the right wheelchair handle."""
+"""Robot hand bodies allowed to contact the right wheelchair handle."""
 
 
 DYNAMIC_WHEELCHAIR_LEFT_HANDLE_ALLOWED_FILTERS = [
@@ -166,10 +171,7 @@ class WheelchairPushRewardsCfg(RewardsCfg):
             "std": 0.08,
             "asset_cfg": SceneEntityCfg(
                 "robot",
-                body_names=[
-                    "left_wrist_yaw_link",
-                    "right_wrist_yaw_link",
-                ],
+                body_names=DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES,
             ),
         },
     )
@@ -181,10 +183,7 @@ class WheelchairPushRewardsCfg(RewardsCfg):
             "target_positions_b": WHEELCHAIR_HANDLE_TARGETS_B,
             "asset_cfg": SceneEntityCfg(
                 "robot",
-                body_names=[
-                    "left_wrist_yaw_link",
-                    "right_wrist_yaw_link",
-                ],
+                body_names=DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES,
             ),
         },
     )
@@ -309,10 +308,7 @@ class DynamicWheelchairPushRewardsCfg(WheelchairPushRewardsCfg):
             "std": 0.08,
             "robot_cfg": SceneEntityCfg(
                 "robot",
-                body_names=[
-                    "left_wrist_yaw_link",
-                    "right_wrist_yaw_link",
-                ],
+                body_names=DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES,
             ),
             "wheelchair_cfg": SceneEntityCfg("wheelchair", body_names=DYNAMIC_WHEELCHAIR_HANDLE_BODY_NAMES),
         },
@@ -324,10 +320,7 @@ class DynamicWheelchairPushRewardsCfg(WheelchairPushRewardsCfg):
         params={
             "robot_cfg": SceneEntityCfg(
                 "robot",
-                body_names=[
-                    "left_wrist_yaw_link",
-                    "right_wrist_yaw_link",
-                ],
+                body_names=DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES,
             ),
             "wheelchair_cfg": SceneEntityCfg("wheelchair", body_names=DYNAMIC_WHEELCHAIR_HANDLE_BODY_NAMES),
         },
@@ -418,10 +411,7 @@ class DynamicWheelchairPushObservedObservationsCfg(ObservationsCfg):
             params={
                 "robot_cfg": SceneEntityCfg(
                     "robot",
-                    body_names=[
-                        "left_wrist_yaw_link",
-                        "right_wrist_yaw_link",
-                    ],
+                    body_names=DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES,
                 ),
                 "wheelchair_cfg": SceneEntityCfg("wheelchair", body_names=DYNAMIC_WHEELCHAIR_HANDLE_BODY_NAMES),
             },
@@ -445,10 +435,7 @@ class DynamicWheelchairPushObservedObservationsCfg(ObservationsCfg):
             params={
                 "robot_cfg": SceneEntityCfg(
                     "robot",
-                    body_names=[
-                        "left_wrist_yaw_link",
-                        "right_wrist_yaw_link",
-                    ],
+                    body_names=DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES,
                 ),
                 "wheelchair_cfg": SceneEntityCfg("wheelchair", body_names=DYNAMIC_WHEELCHAIR_HANDLE_BODY_NAMES),
             },
