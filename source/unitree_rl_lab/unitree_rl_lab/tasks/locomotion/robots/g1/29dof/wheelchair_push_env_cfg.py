@@ -4,7 +4,7 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.utils import configclass
-from isaaclab_rl.rsl_rl import RslRlPpoAlgorithmCfg
+from isaaclab_rl.rsl_rl import RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
 
 from unitree_rl_lab.assets.objects.wheelchair import ACTIVE_MANUAL_WHEELCHAIR_CFG
 from unitree_rl_lab.tasks.locomotion import mdp
@@ -646,6 +646,12 @@ class DynamicWheelchairPushAttachedPPORunnerCfg(DynamicWheelchairPushObservedPPO
 class DynamicWheelchairStandingAttachedRewardsCfg(DynamicWheelchairPushRewardsCfg):
     """Rewards for learning to stand with hands attached before pushing."""
 
+    fall_termination = RewTerm(
+        func=mdp.is_terminated_term,
+        weight=-200.0,
+        params={"term_keys": ["bad_orientation", "base_height"]},
+    )
+
     feet_contact_without_cmd = RewTerm(
         func=mdp.feet_contact_without_cmd,
         weight=0.6,
@@ -680,6 +686,8 @@ def _configure_dynamic_wheelchair_standing_pretrain(env_cfg):
     env_cfg.events.add_base_mass = None
     env_cfg.events.reset_base.params["pose_range"] = {"x": (0.0, 0.0), "y": (0.0, 0.0), "yaw": (0.0, 0.0)}
     env_cfg.events.reset_robot_joints.params["velocity_range"] = (0.0, 0.0)
+    env_cfg.terminations.base_height.params["minimum_height"] = 0.55
+    env_cfg.terminations.bad_orientation.params["limit_angle"] = 0.55
     env_cfg.actions.JointPositionAction.scale = {
         ".*_hip_.*|waist_.*|.*_knee_joint|.*_ankle_.*": 0.12,
         ".*_shoulder_.*|.*_elbow_joint|.*_wrist_.*": 0.0,
@@ -699,16 +707,16 @@ def _configure_dynamic_wheelchair_standing_pretrain(env_cfg):
     env_cfg.rewards.track_lin_vel_xy.params["std"] = 0.25
     env_cfg.rewards.track_ang_vel_z.weight = 1.0
     env_cfg.rewards.track_ang_vel_z.params["std"] = 0.25
-    env_cfg.rewards.alive.weight = 0.5
-    env_cfg.rewards.base_linear_velocity.weight = -2.0
+    env_cfg.rewards.alive.weight = 1.0
+    env_cfg.rewards.base_linear_velocity.weight = -2.5
     env_cfg.rewards.base_angular_velocity.weight = -0.2
     env_cfg.rewards.joint_vel.weight = -0.002
     env_cfg.rewards.joint_acc.weight = -1.0e-6
     env_cfg.rewards.action_rate.weight = 0.0
     env_cfg.rewards.joint_deviation_waists.weight = -1.0
     env_cfg.rewards.joint_deviation_legs.weight = -1.5
-    env_cfg.rewards.flat_orientation_l2.weight = -8.0
-    env_cfg.rewards.base_height.weight = -15.0
+    env_cfg.rewards.flat_orientation_l2.weight = -20.0
+    env_cfg.rewards.base_height.weight = -30.0
     env_cfg.rewards.base_height.params["target_height"] = 0.78
     env_cfg.rewards.gait.weight = 0.0
     env_cfg.rewards.feet_clearance.weight = 0.0
@@ -753,19 +761,27 @@ class DynamicWheelchairStandingObservedRobotPlayEnvCfg(DynamicWheelchairStanding
 class DynamicWheelchairStandingObservedPPORunnerCfg(DynamicWheelchairPushObservedPPORunnerCfg):
     experiment_name = "unitree_g1_29dof_wheelchair_dynamic_stand_observed"
     max_iterations = 1500
+    num_steps_per_env = 48
+    save_interval = 50
+    policy = RslRlPpoActorCriticCfg(
+        init_noise_std=0.05,
+        actor_hidden_dims=[512, 256, 128],
+        critic_hidden_dims=[512, 256, 128],
+        activation="elu",
+    )
     algorithm = RslRlPpoAlgorithmCfg(
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
-        clip_param=0.05,
-        entropy_coef=0.001,
+        clip_param=0.01,
+        entropy_coef=0.0,
         num_learning_epochs=1,
         num_mini_batches=4,
-        learning_rate=3.0e-5,
+        learning_rate=1.0e-6,
         schedule="adaptive",
         gamma=0.99,
         lam=0.95,
-        desired_kl=0.002,
-        max_grad_norm=0.25,
+        desired_kl=0.0002,
+        max_grad_norm=0.05,
     )
 
 
@@ -796,17 +812,25 @@ class DynamicWheelchairStandingAttachedRobotPlayEnvCfg(DynamicWheelchairStanding
 class DynamicWheelchairStandingAttachedPPORunnerCfg(DynamicWheelchairPushObservedPPORunnerCfg):
     experiment_name = "unitree_g1_29dof_wheelchair_dynamic_stand_attached"
     max_iterations = 1500
+    num_steps_per_env = 48
+    save_interval = 50
+    policy = RslRlPpoActorCriticCfg(
+        init_noise_std=0.05,
+        actor_hidden_dims=[512, 256, 128],
+        critic_hidden_dims=[512, 256, 128],
+        activation="elu",
+    )
     algorithm = RslRlPpoAlgorithmCfg(
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
-        clip_param=0.05,
-        entropy_coef=0.001,
+        clip_param=0.01,
+        entropy_coef=0.0,
         num_learning_epochs=1,
         num_mini_batches=4,
-        learning_rate=3.0e-5,
+        learning_rate=1.0e-6,
         schedule="adaptive",
         gamma=0.99,
         lam=0.95,
-        desired_kl=0.002,
-        max_grad_norm=0.25,
+        desired_kl=0.0002,
+        max_grad_norm=0.05,
     )
