@@ -678,6 +678,90 @@ class DynamicWheelchairPushAttachedPPORunnerCfg(DynamicWheelchairPushObservedPPO
 
 
 @configclass
+class RelaxedDynamicWheelchairPushAttachedRobotEnvCfg(DynamicWheelchairPushAttachedRobotEnvCfg):
+    """Walking phase after attached standing: free chair, attached hands, relaxed arm control."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.events.attach_wheelchair_hands.params["mask_collisions"] = False
+        self.actions.JointPositionAction.scale = {
+            ".*_hip_.*|waist_.*|.*_knee_joint|.*_ankle_.*": 0.18,
+            ".*_shoulder_.*|.*_elbow_joint": 0.05,
+            ".*_wrist_.*": 0.015,
+        }
+
+        self.commands.base_velocity.ranges.lin_vel_x = (0.08, 0.22)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (0.05, 0.35)
+        self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
+        self.commands.base_velocity.limit_ranges.lin_vel_y = (0.0, 0.0)
+        self.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
+        self.commands.base_velocity.limit_ranges.ang_vel_z = (0.0, 0.0)
+
+        self.terminations.base_height.params["minimum_height"] = 0.5
+        self.terminations.bad_orientation.params["limit_angle"] = 0.65
+
+        self.rewards.track_lin_vel_xy.weight = 1.0
+        self.rewards.track_lin_vel_xy.params["std"] = 0.3
+        self.rewards.track_ang_vel_z.weight = 0.6
+        self.rewards.track_ang_vel_z.params["std"] = 0.25
+        self.rewards.base_linear_velocity.weight = -1.0
+        self.rewards.base_angular_velocity.weight = -0.1
+        self.rewards.action_rate.weight = -0.01
+        self.rewards.joint_deviation_arms.weight = -0.02
+        self.rewards.joint_deviation_waists.weight = -0.7
+        self.rewards.joint_deviation_legs.weight = -1.0
+        self.rewards.flat_orientation_l2.weight = -8.0
+        self.rewards.base_height.weight = -15.0
+        self.rewards.gait.weight = 0.35
+        self.rewards.feet_clearance.weight = 0.5
+        self.rewards.feet_slide.weight = -0.2
+
+        self.rewards.wheelchair_track_forward_velocity.weight = 3.0
+        self.rewards.wheelchair_track_forward_velocity.params["std"] = 0.18
+        self.rewards.wheelchair_forward_progress.weight = 0.6
+        self.rewards.wheelchair_forward_progress.params["max_velocity"] = 0.6
+        self.rewards.wheelchair_lateral_velocity.weight = -3.0
+        self.rewards.wheelchair_forward_line.weight = -4.0
+        self.rewards.wheelchair_yaw_velocity.weight = -2.0
+        self.rewards.wheelchair_tilt.weight = -10.0
+        self.rewards.wheelchair_wheel_ground_height.weight = -100.0
+        self.rewards.wheelchair_invalid_contact.weight = -0.02
+        self.rewards.wrist_joint_deviation.weight = -0.25
+
+
+@configclass
+class RelaxedDynamicWheelchairPushAttachedRobotPlayEnvCfg(RelaxedDynamicWheelchairPushAttachedRobotEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+        self.commands.base_velocity.ranges.lin_vel_x = (0.18, 0.18)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (0.18, 0.18)
+
+
+@configclass
+class RelaxedDynamicWheelchairPushAttachedPPORunnerCfg(DynamicWheelchairPushObservedPPORunnerCfg):
+    experiment_name = "unitree_g1_29dof_wheelchair_relaxed_push_attached"
+    max_iterations = 2500
+    num_steps_per_env = 48
+    save_interval = 50
+    algorithm = RslRlPpoAlgorithmCfg(
+        value_loss_coef=1.0,
+        use_clipped_value_loss=True,
+        clip_param=0.05,
+        entropy_coef=0.002,
+        num_learning_epochs=2,
+        num_mini_batches=4,
+        learning_rate=3.0e-5,
+        schedule="adaptive",
+        gamma=0.99,
+        lam=0.95,
+        desired_kl=0.001,
+        max_grad_norm=0.2,
+    )
+
+
+@configclass
 class DynamicWheelchairStandingAttachedRewardsCfg(DynamicWheelchairPushRewardsCfg):
     """Rewards for learning to stand with hands attached before pushing."""
 
