@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 
 import isaaclab.sim as sim_utils
@@ -59,3 +60,6 @@ ACTIVE_MANUAL_WHEELCHAIR_CFG = ArticulationCfg(
     ),
     actuators={},
 )
+
+ACTIVE_MANUAL_WHEELCHAIR_FIXED_BASE_CFG = copy.deepcopy(ACTIVE_MANUAL_WHEELCHAIR_CFG)
+ACTIVE_MANUAL_WHEELCHAIR_FIXED_BASE_CFG.spawn.fix_base = True

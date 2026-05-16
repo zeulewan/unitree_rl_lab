@@ -6,7 +6,10 @@ from isaaclab.sensors import ContactSensorCfg
 from isaaclab.utils import configclass
 from isaaclab_rl.rsl_rl import RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
 
-from unitree_rl_lab.assets.objects.wheelchair import ACTIVE_MANUAL_WHEELCHAIR_CFG
+from unitree_rl_lab.assets.objects.wheelchair import (
+    ACTIVE_MANUAL_WHEELCHAIR_CFG,
+    ACTIVE_MANUAL_WHEELCHAIR_FIXED_BASE_CFG,
+)
 from unitree_rl_lab.tasks.locomotion import mdp
 from unitree_rl_lab.tasks.locomotion.agents.rsl_rl_ppo_cfg import BasePPORunnerCfg
 
@@ -327,6 +330,14 @@ class DynamicWheelchairPushSceneCfg(RobotSceneCfg):
         history_length=3,
         filter_prim_paths_expr=DYNAMIC_WHEELCHAIR_ROBOT_CONTACT_FILTERS,
     )
+
+
+@configclass
+class FixedBaseDynamicWheelchairPushSceneCfg(DynamicWheelchairPushSceneCfg):
+    """Wheelchair scene with the chair root fixed for first attached-hands standing."""
+
+    wheelchair = ACTIVE_MANUAL_WHEELCHAIR_FIXED_BASE_CFG.replace(prim_path="{ENV_REGEX_NS}/Wheelchair")
+    wheelchair.init_state.pos = DYNAMIC_WHEELCHAIR_INIT_POS
 
 
 @configclass
@@ -854,6 +865,33 @@ class DynamicWheelchairStandingAttachedRobotEnvCfg(DynamicWheelchairPushAttached
 
 
 @configclass
+class FixedBaseDynamicWheelchairStandingAttachedRobotEnvCfg(DynamicWheelchairStandingAttachedRobotEnvCfg):
+    """First holding primitive: hands attached to handles while the wheelchair base is fixed."""
+
+    scene: FixedBaseDynamicWheelchairPushSceneCfg = FixedBaseDynamicWheelchairPushSceneCfg(
+        num_envs=2048, env_spacing=4.0
+    )
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.rewards.wheelchair_track_forward_velocity.weight = 0.0
+        self.rewards.wheelchair_forward_progress.weight = 0.0
+        self.rewards.wheelchair_lateral_velocity.weight = 0.0
+        self.rewards.wheelchair_forward_line.weight = 0.0
+        self.rewards.wheelchair_yaw_velocity.weight = 0.0
+        self.rewards.wheelchair_tilt.weight = 0.0
+        self.rewards.wheelchair_wheel_ground_height.weight = 0.0
+        self.rewards.wheelchair_xy_velocity.weight = 0.0
+
+
+@configclass
+class FixedBaseDynamicWheelchairStandingAttachedRobotPlayEnvCfg(FixedBaseDynamicWheelchairStandingAttachedRobotEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
 class DynamicWheelchairStandingAttachedRobotPlayEnvCfg(DynamicWheelchairStandingAttachedRobotEnvCfg):
     def __post_init__(self):
         super().__post_init__()
@@ -886,3 +924,8 @@ class DynamicWheelchairStandingAttachedPPORunnerCfg(DynamicWheelchairPushObserve
         desired_kl=0.0002,
         max_grad_norm=0.05,
     )
+
+
+@configclass
+class FixedBaseDynamicWheelchairStandingAttachedPPORunnerCfg(DynamicWheelchairStandingAttachedPPORunnerCfg):
+    experiment_name = "unitree_g1_29dof_wheelchair_fixed_stand_attached"

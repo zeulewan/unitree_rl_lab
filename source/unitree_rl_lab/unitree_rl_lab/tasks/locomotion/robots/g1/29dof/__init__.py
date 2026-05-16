@@ -133,6 +133,17 @@ gym.register(
 )
 
 gym.register(
+    id="Unitree-G1-29dof-Wheelchair-Fixed-Stand-Attached",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:FixedBaseDynamicWheelchairStandingAttachedRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:FixedBaseDynamicWheelchairStandingAttachedRobotPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:FixedBaseDynamicWheelchairStandingAttachedPPORunnerCfg",
+    },
+)
+
+gym.register(
     id="Unitree-G1-29dof-Wheelchair-Dynamic-Stand-Observed",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
