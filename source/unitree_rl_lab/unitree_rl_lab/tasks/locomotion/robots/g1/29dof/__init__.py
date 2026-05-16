@@ -45,6 +45,17 @@ gym.register(
 )
 
 gym.register(
+    id="Unitree-G1-29dof-Stand-Reach-Arms",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.standing_env_cfg:StandingReachArmsRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.standing_env_cfg:StandingReachArmsRobotPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.standing_env_cfg:StandingReachArmsPPORunnerCfg",
+    },
+)
+
+gym.register(
     id="Unitree-G1-29dof-Running-Fast",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,

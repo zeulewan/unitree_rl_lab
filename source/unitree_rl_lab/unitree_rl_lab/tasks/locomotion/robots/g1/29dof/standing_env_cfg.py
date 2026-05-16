@@ -9,6 +9,25 @@ from unitree_rl_lab.tasks.locomotion import mdp
 from .velocity_env_cfg import RewardsCfg, RobotEnvCfg
 
 
+NEUTRAL_ARM_JOINT_POSE = {
+    "left_shoulder_pitch_joint": 0.3,
+    "left_shoulder_roll_joint": 0.25,
+    "left_shoulder_yaw_joint": 0.0,
+    "left_elbow_joint": 0.97,
+    "left_wrist_roll_joint": 0.15,
+    "left_wrist_pitch_joint": 0.0,
+    "left_wrist_yaw_joint": 0.0,
+    "right_shoulder_pitch_joint": 0.3,
+    "right_shoulder_roll_joint": -0.25,
+    "right_shoulder_yaw_joint": 0.0,
+    "right_elbow_joint": 0.97,
+    "right_wrist_roll_joint": -0.15,
+    "right_wrist_pitch_joint": 0.0,
+    "right_wrist_yaw_joint": 0.0,
+}
+"""Expanded base G1 arm pose used by the stable standing checkpoint."""
+
+
 HANDLE_ARM_JOINT_POSE = {
     "left_shoulder_pitch_joint": -0.495,
     "left_shoulder_roll_joint": 0.374,
@@ -26,6 +45,18 @@ HANDLE_ARM_JOINT_POSE = {
     "right_wrist_yaw_joint": -0.011,
 }
 """Arm pose used before attaching the hands to wheelchair handles."""
+
+
+def _blend_arm_pose(alpha: float) -> dict[str, float]:
+    return {
+        joint_name: NEUTRAL_ARM_JOINT_POSE[joint_name]
+        + alpha * (HANDLE_ARM_JOINT_POSE[joint_name] - NEUTRAL_ARM_JOINT_POSE[joint_name])
+        for joint_name in HANDLE_ARM_JOINT_POSE
+    }
+
+
+REACH_ARM_JOINT_POSE = _blend_arm_pose(0.35)
+"""Intermediate arm pose for standing before the full handle pose."""
 
 
 @configclass
@@ -120,6 +151,24 @@ class StandingRobotPlayEnvCfg(StandingRobotEnvCfg):
 
 
 @configclass
+class StandingReachArmsRobotEnvCfg(StandingRobotEnvCfg):
+    """Zero-velocity stand with a partial handle-reaching arm pose and no chair support."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.robot.init_state.joint_pos.pop(".*_shoulder_pitch_joint", None)
+        self.scene.robot.init_state.joint_pos.pop(".*_elbow_joint", None)
+        self.scene.robot.init_state.joint_pos.update(REACH_ARM_JOINT_POSE)
+
+
+@configclass
+class StandingReachArmsRobotPlayEnvCfg(StandingReachArmsRobotEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
 class StandingHandleArmsRobotEnvCfg(StandingRobotEnvCfg):
     """Zero-velocity stand with the wheelchair handle arm pose and no chair support."""
 
@@ -169,3 +218,8 @@ class StandingPPORunnerCfg(BasePPORunnerCfg):
 @configclass
 class StandingHandleArmsPPORunnerCfg(StandingPPORunnerCfg):
     experiment_name = "unitree_g1_29dof_stand_handle_arms"
+
+
+@configclass
+class StandingReachArmsPPORunnerCfg(StandingPPORunnerCfg):
+    experiment_name = "unitree_g1_29dof_stand_reach_arms"
