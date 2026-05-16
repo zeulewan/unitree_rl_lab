@@ -53,6 +53,21 @@ DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES = [
 """Left/right G1 hand bodies that should align with the wheelchair handle bodies."""
 
 
+DYNAMIC_WHEELCHAIR_HAND_HANDLE_ATTACHMENTS = [
+    {
+        "joint_name": "left_hand_to_handle_anchor_joint",
+        "robot_body": "left_rubber_hand",
+        "wheelchair_body": "left_handle_frame",
+    },
+    {
+        "joint_name": "right_hand_to_handle_anchor_joint",
+        "robot_body": "right_rubber_hand",
+        "wheelchair_body": "right_handle_frame",
+    },
+]
+"""Hand-handle joint pairs used by the attached-hands wheelchair task."""
+
+
 DYNAMIC_WHEELCHAIR_WHEEL_BODY_NAMES = [
     "left_rear_wheel",
     "right_rear_wheel",
@@ -572,3 +587,52 @@ class DynamicWheelchairPushObservedPPORunnerCfg(BasePPORunnerCfg):
         desired_kl=0.005,
         max_grad_norm=0.5,
     )
+
+
+@configclass
+class DynamicWheelchairPushAttachedRobotEnvCfg(DynamicWheelchairPushObservedRobotEnvCfg):
+    """Dynamic wheelchair-push task with hands anchored to the wheelchair handles."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.events.attach_wheelchair_hands = EventTerm(
+            func=mdp.attach_wheelchair_hands_to_handles,
+            mode="startup",
+            params={
+                "attachments": DYNAMIC_WHEELCHAIR_HAND_HANDLE_ATTACHMENTS,
+                "joint_type": "spherical",
+                "mask_collisions": True,
+            },
+        )
+
+        self.commands.base_velocity.ranges.lin_vel_x = (0.05, 0.25)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (0.05, 0.45)
+        self.events.reset_robot_joints.params["velocity_range"] = (0.0, 0.0)
+        self.actions.JointPositionAction.scale = {
+            ".*_hip_.*|waist_.*|.*_knee_joint|.*_ankle_.*": 0.25,
+            ".*_shoulder_.*|.*_elbow_joint|.*_wrist_.*": 0.0,
+        }
+
+        self.rewards.dynamic_hand_handle_position.weight = 0.0
+        self.rewards.dynamic_hand_handle_position_l2.weight = 0.0
+        self.rewards.hand_handle_axis_alignment.weight = 0.0
+        self.rewards.wheelchair_handle_contact.weight = 0.0
+        self.rewards.wheelchair_invalid_contact.weight = -0.03
+        self.rewards.wrist_joint_deviation.weight = -0.35
+        self.rewards.action_rate.weight = 0.0
+
+
+@configclass
+class DynamicWheelchairPushAttachedRobotPlayEnvCfg(DynamicWheelchairPushAttachedRobotEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+        self.commands.base_velocity.ranges.lin_vel_x = (0.15, 0.15)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (0.15, 0.15)
+
+
+@configclass
+class DynamicWheelchairPushAttachedPPORunnerCfg(DynamicWheelchairPushObservedPPORunnerCfg):
+    experiment_name = "unitree_g1_29dof_wheelchair_dynamic_push_attached"
+    max_iterations = 3000
