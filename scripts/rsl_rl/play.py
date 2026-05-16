@@ -62,6 +62,24 @@ parser.add_argument(
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument(
+    "--zero-actions",
+    action="store_true",
+    default=False,
+    help="Step the environment with zero actions instead of the loaded policy.",
+)
+parser.add_argument(
+    "--ragdoll-robot",
+    action="store_true",
+    default=False,
+    help="Set robot joint stiffness and damping to zero before playback.",
+)
+parser.add_argument(
+    "--disable-fall-terminations",
+    action="store_true",
+    default=False,
+    help="Disable base-height and bad-orientation termination terms for diagnostic playback.",
+)
+parser.add_argument(
     "--use_pretrained_checkpoint",
     action="store_true",
     help="Use the pre-trained checkpoint from Nucleus.",
@@ -153,6 +171,22 @@ def _set_follow_camera(env, timestep: int = 0):
             _set_follow_camera._warned = True
 
 
+def _disable_robot_actuators(env):
+    """Turn the robot into a passive articulation for startup diagnostics."""
+    try:
+        robot = env.unwrapped.scene["robot"]
+        robot.write_joint_stiffness_to_sim(torch.zeros_like(robot.data.joint_stiffness))
+        robot.write_joint_damping_to_sim(torch.zeros_like(robot.data.joint_damping))
+        for actuator in robot.actuators.values():
+            if hasattr(actuator, "stiffness"):
+                actuator.stiffness[:] = 0.0
+            if hasattr(actuator, "damping"):
+                actuator.damping[:] = 0.0
+        print("[INFO] Ragdoll playback: robot joint stiffness and damping set to zero.")
+    except Exception as err:
+        print(f"[WARN] Failed to disable robot actuators for ragdoll playback: {err}")
+
+
 def main():
     """Play with RSL-RL agent."""
     # parse configuration
@@ -163,6 +197,13 @@ def main():
         use_fabric=not args_cli.disable_fabric,
         entry_point_key="play_env_cfg_entry_point",
     )
+    if args_cli.disable_fall_terminations and hasattr(env_cfg, "terminations"):
+        for term_name in ("base_height", "bad_orientation"):
+            if hasattr(env_cfg.terminations, term_name):
+                setattr(env_cfg.terminations, term_name, None)
+        if hasattr(env_cfg, "rewards") and hasattr(env_cfg.rewards, "fall_termination"):
+            env_cfg.rewards.fall_termination = None
+        print("[INFO] Diagnostic playback: disabled base_height and bad_orientation terminations.")
     agent_cfg: RslRlOnPolicyRunnerCfg = cli_args.parse_rsl_rl_cfg(args_cli.task, args_cli)
 
     # specify directory for logging experiments
@@ -204,6 +245,8 @@ def main():
 
     # wrap around environment for rsl-rl
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
+    if args_cli.ragdoll_robot:
+        _disable_robot_actuators(base_env)
 
     print(f"[INFO]: Loading model checkpoint from: {resume_path}")
     # load previously trained model
@@ -256,7 +299,10 @@ def main():
         # run everything in inference mode
         with torch.inference_mode():
             # agent stepping
-            actions = policy(obs)
+            if args_cli.zero_actions:
+                actions = torch.zeros((env.num_envs, env.num_actions), device=env.device)
+            else:
+                actions = policy(obs)
             _set_follow_camera(base_env, timestep=timestep)
             # env stepping
             obs, _, _, _ = env.step(actions)
