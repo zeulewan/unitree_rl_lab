@@ -640,6 +640,7 @@ class DynamicWheelchairPushAttachedRobotEnvCfg(DynamicWheelchairPushObservedRobo
                 "attachments": DYNAMIC_WHEELCHAIR_HAND_HANDLE_ATTACHMENTS,
                 "joint_type": "spherical",
                 "mask_collisions": True,
+                "anchor_at_body_origins": True,
             },
         )
 

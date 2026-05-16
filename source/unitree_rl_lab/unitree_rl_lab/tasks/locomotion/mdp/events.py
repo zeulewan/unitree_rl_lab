@@ -40,6 +40,15 @@ def _set_joint_frame_at_body1(stage, joint: UsdPhysics.Joint, body0_path: str, b
     joint.CreateLocalRot1Attr().Set(_quatf(local1.GetRotation().GetQuat()))
 
 
+def _set_joint_frame_at_body_origins(joint: UsdPhysics.Joint) -> None:
+    """Attach body origins directly, avoiding a startup-pose-dependent offset."""
+
+    joint.CreateLocalPos0Attr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
+    joint.CreateLocalRot0Attr().Set(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
+    joint.CreateLocalPos1Attr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
+    joint.CreateLocalRot1Attr().Set(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
+
+
 def _mask_collision_pair(stage, body0_path: str, body1_path: str) -> None:
     filtering_pairs = UsdPhysics.FilteredPairsAPI.Apply(stage.GetPrimAtPath(body0_path))
     rel = filtering_pairs.CreateFilteredPairsRel()
@@ -57,6 +66,7 @@ def attach_wheelchair_hands_to_handles(
     joint_root_name: str = "HandHandleFixedJoints",
     joint_type: str = "spherical",
     mask_collisions: bool = True,
+    anchor_at_body_origins: bool = False,
 ) -> None:
     """Create USD joints from G1 hand bodies to wheelchair handle bodies."""
 
@@ -92,7 +102,10 @@ def attach_wheelchair_hands_to_handles(
             joint.CreateBody0Rel().SetTargets([Sdf.Path(body0_path)])
             joint.CreateBody1Rel().SetTargets([Sdf.Path(body1_path)])
             joint.GetExcludeFromArticulationAttr().Set(True)
-            _set_joint_frame_at_body1(stage, joint, body0_path, body1_path)
+            if anchor_at_body_origins:
+                _set_joint_frame_at_body_origins(joint)
+            else:
+                _set_joint_frame_at_body1(stage, joint, body0_path, body1_path)
 
             if mask_collisions:
                 _mask_collision_pair(stage, body0_path, body1_path)
