@@ -635,11 +635,12 @@ class DynamicWheelchairPushAttachedRobotEnvCfg(DynamicWheelchairPushObservedRobo
 
         self.events.attach_wheelchair_hands = EventTerm(
             func=mdp.attach_wheelchair_hands_to_handles,
-            mode="startup",
+            mode="reset",
             params={
                 "attachments": DYNAMIC_WHEELCHAIR_HAND_HANDLE_ATTACHMENTS,
                 "joint_type": "spherical",
                 "mask_collisions": True,
+                "anchor_at_body_origins": True,
             },
         )
 

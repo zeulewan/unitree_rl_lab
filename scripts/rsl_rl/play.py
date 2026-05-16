@@ -80,6 +80,18 @@ parser.add_argument(
     help="Disable base-height and bad-orientation termination terms for diagnostic playback.",
 )
 parser.add_argument(
+    "--print-hand-handle-offsets",
+    action="store_true",
+    default=False,
+    help="Print rubber-hand to wheelchair-handle offsets after reset for attached-wheelchair diagnostics.",
+)
+parser.add_argument(
+    "--exit-after-offset-print",
+    action="store_true",
+    default=False,
+    help="Exit immediately after --print-hand-handle-offsets.",
+)
+parser.add_argument(
     "--use_pretrained_checkpoint",
     action="store_true",
     help="Use the pre-trained checkpoint from Nucleus.",
@@ -187,6 +199,35 @@ def _disable_robot_actuators(env):
         print(f"[WARN] Failed to disable robot actuators for ragdoll playback: {err}")
 
 
+def _print_hand_handle_offsets(env):
+    """Print measured hand-to-handle offsets after reset for startup alignment debugging."""
+    try:
+        robot = env.unwrapped.scene["robot"]
+        wheelchair = env.unwrapped.scene["wheelchair"]
+        hand_ids = [robot.data.body_names.index("left_rubber_hand"), robot.data.body_names.index("right_rubber_hand")]
+        handle_ids = [
+            wheelchair.data.body_names.index("left_handle_frame"),
+            wheelchair.data.body_names.index("right_handle_frame"),
+        ]
+        hand_pos_w = robot.data.body_pos_w[:, hand_ids, :]
+        handle_pos_w = wheelchair.data.body_pos_w[:, handle_ids, :]
+        offset_w = handle_pos_w - hand_pos_w
+        error = torch.linalg.norm(offset_w, dim=-1)
+        env_index = 0
+        print("[INFO] Hand-handle startup offsets for env 0:", flush=True)
+        for side_index, side_name in enumerate(("left", "right")):
+            print(
+                "[INFO] "
+                f"{side_name}: handle_minus_hand_w={offset_w[env_index, side_index].detach().cpu().tolist()} "
+                f"error_m={float(error[env_index, side_index].detach().cpu()):.6f}",
+                flush=True,
+            )
+        print(f"[INFO] robot_root_w={robot.data.root_pos_w[env_index].detach().cpu().tolist()}", flush=True)
+        print(f"[INFO] wheelchair_root_w={wheelchair.data.root_pos_w[env_index].detach().cpu().tolist()}", flush=True)
+    except Exception as err:
+        print(f"[WARN] Failed to print hand-handle offsets: {err}", flush=True)
+
+
 def main():
     """Play with RSL-RL agent."""
     # parse configuration
@@ -291,6 +332,11 @@ def main():
     obs = env.get_observations()
     if version("rsl-rl-lib").startswith("2.3."):
         obs, _ = env.get_observations()
+    if args_cli.print_hand_handle_offsets:
+        _print_hand_handle_offsets(base_env)
+        if args_cli.exit_after_offset_print:
+            env.close()
+            return
     _set_follow_camera(base_env, timestep=0)
     timestep = 0
     # simulate environment
