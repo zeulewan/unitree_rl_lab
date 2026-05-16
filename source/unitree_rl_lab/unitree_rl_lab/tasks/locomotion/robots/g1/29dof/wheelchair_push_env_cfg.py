@@ -673,6 +673,102 @@ class DynamicWheelchairStandingAttachedRewardsCfg(DynamicWheelchairPushRewardsCf
     )
 
 
+def _configure_dynamic_wheelchair_standing_pretrain(env_cfg):
+    """Apply zero-motion standing settings shared by observed and attached stand pretrains."""
+
+    env_cfg.episode_length_s = 10.0
+    env_cfg.events.add_base_mass = None
+    env_cfg.events.reset_base.params["pose_range"] = {"x": (0.0, 0.0), "y": (0.0, 0.0), "yaw": (0.0, 0.0)}
+    env_cfg.events.reset_robot_joints.params["velocity_range"] = (0.0, 0.0)
+    env_cfg.actions.JointPositionAction.scale = {
+        ".*_hip_.*|waist_.*|.*_knee_joint|.*_ankle_.*": 0.12,
+        ".*_shoulder_.*|.*_elbow_joint|.*_wrist_.*": 0.0,
+    }
+
+    env_cfg.commands.base_velocity.rel_standing_envs = 1.0
+    env_cfg.commands.base_velocity.rel_heading_envs = 0.0
+    env_cfg.commands.base_velocity.heading_command = False
+    env_cfg.commands.base_velocity.ranges.lin_vel_x = (0.0, 0.0)
+    env_cfg.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
+    env_cfg.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
+    env_cfg.commands.base_velocity.limit_ranges.lin_vel_x = (0.0, 0.0)
+    env_cfg.commands.base_velocity.limit_ranges.lin_vel_y = (0.0, 0.0)
+    env_cfg.commands.base_velocity.limit_ranges.ang_vel_z = (0.0, 0.0)
+
+    env_cfg.rewards.track_lin_vel_xy.weight = 2.0
+    env_cfg.rewards.track_lin_vel_xy.params["std"] = 0.25
+    env_cfg.rewards.track_ang_vel_z.weight = 1.0
+    env_cfg.rewards.track_ang_vel_z.params["std"] = 0.25
+    env_cfg.rewards.alive.weight = 0.5
+    env_cfg.rewards.base_linear_velocity.weight = -2.0
+    env_cfg.rewards.base_angular_velocity.weight = -0.2
+    env_cfg.rewards.joint_vel.weight = -0.002
+    env_cfg.rewards.joint_acc.weight = -1.0e-6
+    env_cfg.rewards.action_rate.weight = 0.0
+    env_cfg.rewards.joint_deviation_waists.weight = -1.0
+    env_cfg.rewards.joint_deviation_legs.weight = -1.5
+    env_cfg.rewards.flat_orientation_l2.weight = -8.0
+    env_cfg.rewards.base_height.weight = -15.0
+    env_cfg.rewards.base_height.params["target_height"] = 0.78
+    env_cfg.rewards.gait.weight = 0.0
+    env_cfg.rewards.feet_clearance.weight = 0.0
+    env_cfg.rewards.feet_slide.weight = -0.3
+
+    env_cfg.rewards.hand_handle_position.weight = 0.0
+    env_cfg.rewards.hand_handle_position_l2.weight = 0.0
+    env_cfg.rewards.dynamic_hand_handle_position.weight = 0.0
+    env_cfg.rewards.dynamic_hand_handle_position_l2.weight = 0.0
+    env_cfg.rewards.hand_handle_axis_alignment.weight = 0.0
+    env_cfg.rewards.wheelchair_track_forward_velocity.weight = 2.0
+    env_cfg.rewards.wheelchair_track_forward_velocity.params["std"] = 0.12
+    env_cfg.rewards.wheelchair_forward_progress.weight = -1.0
+    env_cfg.rewards.wheelchair_lateral_velocity.weight = -2.0
+    env_cfg.rewards.wheelchair_forward_line.weight = -2.0
+    env_cfg.rewards.wheelchair_yaw_velocity.weight = -1.0
+    env_cfg.rewards.wheelchair_tilt.weight = -8.0
+    env_cfg.rewards.wheelchair_wheel_ground_height.weight = -80.0
+    env_cfg.rewards.wheelchair_invalid_contact.weight = -0.05
+    env_cfg.rewards.wrist_joint_deviation.weight = -0.5
+
+
+@configclass
+class DynamicWheelchairStandingObservedRobotEnvCfg(DynamicWheelchairPushObservedRobotEnvCfg):
+    """Standing-only pretrain with wheelchair observations but no hand-handle joint."""
+
+    rewards: DynamicWheelchairStandingAttachedRewardsCfg = DynamicWheelchairStandingAttachedRewardsCfg()
+
+    def __post_init__(self):
+        super().__post_init__()
+        _configure_dynamic_wheelchair_standing_pretrain(self)
+
+
+@configclass
+class DynamicWheelchairStandingObservedRobotPlayEnvCfg(DynamicWheelchairStandingObservedRobotEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class DynamicWheelchairStandingObservedPPORunnerCfg(DynamicWheelchairPushObservedPPORunnerCfg):
+    experiment_name = "unitree_g1_29dof_wheelchair_dynamic_stand_observed"
+    max_iterations = 1500
+    algorithm = RslRlPpoAlgorithmCfg(
+        value_loss_coef=1.0,
+        use_clipped_value_loss=True,
+        clip_param=0.05,
+        entropy_coef=0.001,
+        num_learning_epochs=1,
+        num_mini_batches=4,
+        learning_rate=3.0e-5,
+        schedule="adaptive",
+        gamma=0.99,
+        lam=0.95,
+        desired_kl=0.002,
+        max_grad_norm=0.25,
+    )
+
+
 @configclass
 class DynamicWheelchairStandingAttachedRobotEnvCfg(DynamicWheelchairPushAttachedRobotEnvCfg):
     """Standing-only pretraining task for the attached-hands wheelchair setup.
@@ -686,60 +782,7 @@ class DynamicWheelchairStandingAttachedRobotEnvCfg(DynamicWheelchairPushAttached
 
     def __post_init__(self):
         super().__post_init__()
-
-        self.episode_length_s = 10.0
-        self.events.add_base_mass = None
-        self.events.reset_base.params["pose_range"] = {"x": (0.0, 0.0), "y": (0.0, 0.0), "yaw": (0.0, 0.0)}
-        self.events.reset_robot_joints.params["velocity_range"] = (0.0, 0.0)
-        self.actions.JointPositionAction.scale = {
-            ".*_hip_.*|waist_.*|.*_knee_joint|.*_ankle_.*": 0.12,
-            ".*_shoulder_.*|.*_elbow_joint|.*_wrist_.*": 0.0,
-        }
-
-        self.commands.base_velocity.rel_standing_envs = 1.0
-        self.commands.base_velocity.rel_heading_envs = 0.0
-        self.commands.base_velocity.heading_command = False
-        self.commands.base_velocity.ranges.lin_vel_x = (0.0, 0.0)
-        self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
-        self.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
-        self.commands.base_velocity.limit_ranges.lin_vel_x = (0.0, 0.0)
-        self.commands.base_velocity.limit_ranges.lin_vel_y = (0.0, 0.0)
-        self.commands.base_velocity.limit_ranges.ang_vel_z = (0.0, 0.0)
-
-        self.rewards.track_lin_vel_xy.weight = 2.0
-        self.rewards.track_lin_vel_xy.params["std"] = 0.25
-        self.rewards.track_ang_vel_z.weight = 1.0
-        self.rewards.track_ang_vel_z.params["std"] = 0.25
-        self.rewards.alive.weight = 0.5
-        self.rewards.base_linear_velocity.weight = -2.0
-        self.rewards.base_angular_velocity.weight = -0.2
-        self.rewards.joint_vel.weight = -0.002
-        self.rewards.joint_acc.weight = -1.0e-6
-        self.rewards.action_rate.weight = 0.0
-        self.rewards.joint_deviation_waists.weight = -1.0
-        self.rewards.joint_deviation_legs.weight = -1.5
-        self.rewards.flat_orientation_l2.weight = -8.0
-        self.rewards.base_height.weight = -15.0
-        self.rewards.base_height.params["target_height"] = 0.78
-        self.rewards.gait.weight = 0.0
-        self.rewards.feet_clearance.weight = 0.0
-        self.rewards.feet_slide.weight = -0.3
-
-        self.rewards.hand_handle_position.weight = 0.0
-        self.rewards.hand_handle_position_l2.weight = 0.0
-        self.rewards.dynamic_hand_handle_position.weight = 0.0
-        self.rewards.dynamic_hand_handle_position_l2.weight = 0.0
-        self.rewards.hand_handle_axis_alignment.weight = 0.0
-        self.rewards.wheelchair_track_forward_velocity.weight = 2.0
-        self.rewards.wheelchair_track_forward_velocity.params["std"] = 0.12
-        self.rewards.wheelchair_forward_progress.weight = -1.0
-        self.rewards.wheelchair_lateral_velocity.weight = -2.0
-        self.rewards.wheelchair_forward_line.weight = -2.0
-        self.rewards.wheelchair_yaw_velocity.weight = -1.0
-        self.rewards.wheelchair_tilt.weight = -8.0
-        self.rewards.wheelchair_wheel_ground_height.weight = -80.0
-        self.rewards.wheelchair_invalid_contact.weight = -0.05
-        self.rewards.wrist_joint_deviation.weight = -0.5
+        _configure_dynamic_wheelchair_standing_pretrain(self)
 
 
 @configclass
