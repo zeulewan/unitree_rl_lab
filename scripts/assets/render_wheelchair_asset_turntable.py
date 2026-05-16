@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Render an asset-only turntable for the normalized Free3D wheelchair OBJ."""
+"""Render asset-only turntables for the wheelchair visual or training proxy."""
 
 from __future__ import annotations
 
 import argparse
 import math
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -40,6 +41,18 @@ def _default_obj_path() -> Path:
         / "free3d_active_wheelchair"
         / "visual"
         / "active_wheelchair.obj"
+    )
+
+
+def _default_urdf_path() -> Path:
+    return (
+        _repo_root()
+        / "assets"
+        / "objects"
+        / "wheelchair"
+        / "free3d_active_wheelchair"
+        / "urdf"
+        / "active_manual_wheelchair.urdf"
     )
 
 
@@ -163,6 +176,173 @@ def _triangle_colors(
     return np.asarray(colors, dtype=np.float32)
 
 
+def _rpy_matrix(rpy: np.ndarray) -> np.ndarray:
+    roll, pitch, yaw = rpy
+    cr, sr = math.cos(roll), math.sin(roll)
+    cp, sp = math.cos(pitch), math.sin(pitch)
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    rx = np.array([[1.0, 0.0, 0.0], [0.0, cr, -sr], [0.0, sr, cr]], dtype=np.float32)
+    ry = np.array([[cp, 0.0, sp], [0.0, 1.0, 0.0], [-sp, 0.0, cp]], dtype=np.float32)
+    rz = np.array([[cy, -sy, 0.0], [sy, cy, 0.0], [0.0, 0.0, 1.0]], dtype=np.float32)
+    return rz @ ry @ rx
+
+
+def _transform_from_origin(origin: ET.Element | None) -> np.ndarray:
+    xyz = np.zeros(3, dtype=np.float32)
+    rpy = np.zeros(3, dtype=np.float32)
+    if origin is not None:
+        if origin.get("xyz"):
+            xyz = np.asarray([float(value) for value in origin.get("xyz", "").split()], dtype=np.float32)
+        if origin.get("rpy"):
+            rpy = np.asarray([float(value) for value in origin.get("rpy", "").split()], dtype=np.float32)
+    transform = np.eye(4, dtype=np.float32)
+    transform[:3, :3] = _rpy_matrix(rpy)
+    transform[:3, 3] = xyz
+    return transform
+
+
+def _apply_transform(vertices: np.ndarray, transform: np.ndarray) -> np.ndarray:
+    homogeneous = np.concatenate([vertices, np.ones((vertices.shape[0], 1), dtype=np.float32)], axis=1)
+    return (homogeneous @ transform.T)[:, :3]
+
+
+def _box_mesh(size: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    sx, sy, sz = size * 0.5
+    vertices = np.asarray(
+        [
+            [-sx, -sy, -sz],
+            [sx, -sy, -sz],
+            [sx, sy, -sz],
+            [-sx, sy, -sz],
+            [-sx, -sy, sz],
+            [sx, -sy, sz],
+            [sx, sy, sz],
+            [-sx, sy, sz],
+        ],
+        dtype=np.float32,
+    )
+    faces = np.asarray(
+        [
+            [0, 1, 2],
+            [0, 2, 3],
+            [4, 6, 5],
+            [4, 7, 6],
+            [0, 4, 5],
+            [0, 5, 1],
+            [1, 5, 6],
+            [1, 6, 2],
+            [2, 6, 7],
+            [2, 7, 3],
+            [3, 7, 4],
+            [3, 4, 0],
+        ],
+        dtype=np.int32,
+    )
+    return vertices, faces
+
+
+def _cylinder_mesh(radius: float, length: float, segments: int = 48) -> tuple[np.ndarray, np.ndarray]:
+    vertices: list[tuple[float, float, float]] = []
+    half = length * 0.5
+    for z in (-half, half):
+        for index in range(segments):
+            angle = 2.0 * math.pi * index / segments
+            vertices.append((radius * math.cos(angle), radius * math.sin(angle), z))
+    bottom_center = len(vertices)
+    vertices.append((0.0, 0.0, -half))
+    top_center = len(vertices)
+    vertices.append((0.0, 0.0, half))
+
+    faces: list[tuple[int, int, int]] = []
+    for index in range(segments):
+        next_index = (index + 1) % segments
+        b0, b1 = index, next_index
+        t0, t1 = index + segments, next_index + segments
+        faces.append((b0, b1, t1))
+        faces.append((b0, t1, t0))
+        faces.append((bottom_center, b0, b1))
+        faces.append((top_center, t1, t0))
+    return np.asarray(vertices, dtype=np.float32), np.asarray(faces, dtype=np.int32)
+
+
+def _urdf_color(link_name: str, collision_name: str) -> np.ndarray:
+    name = f"{link_name}_{collision_name}".lower()
+    if "handle" in name:
+        return np.array([0.95, 0.62, 0.08], dtype=np.float32)
+    if "rear_wheel" in name or "front_caster" in name:
+        return np.array([0.16, 0.16, 0.17], dtype=np.float32)
+    if "front_frame" in name or "side_frame" in name:
+        return np.array([0.24, 0.06, 0.72], dtype=np.float32)
+    if "backrest" in name or "seat" in name:
+        return np.array([0.10, 0.10, 0.115], dtype=np.float32)
+    return np.array([0.45, 0.45, 0.42], dtype=np.float32)
+
+
+def _link_transforms(robot: ET.Element) -> dict[str, np.ndarray]:
+    transforms = {"base_link": np.eye(4, dtype=np.float32)}
+    unresolved = list(robot.findall("joint"))
+    while unresolved:
+        remaining: list[ET.Element] = []
+        progress = False
+        for joint in unresolved:
+            parent = joint.find("parent")
+            child = joint.find("child")
+            if parent is None or child is None:
+                continue
+            parent_name = parent.get("link")
+            child_name = child.get("link")
+            if parent_name in transforms and child_name is not None:
+                transforms[child_name] = transforms[parent_name] @ _transform_from_origin(joint.find("origin"))
+                progress = True
+            else:
+                remaining.append(joint)
+        if not progress and remaining:
+            missing = ", ".join(joint.get("name", "<unnamed>") for joint in remaining)
+            raise ValueError(f"Could not resolve URDF joint transforms: {missing}")
+        unresolved = remaining
+    return transforms
+
+
+def _load_urdf_collision_mesh(urdf_path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    robot = ET.parse(urdf_path).getroot()
+    transforms = _link_transforms(robot)
+    vertices: list[np.ndarray] = []
+    faces: list[np.ndarray] = []
+    colors: list[np.ndarray] = []
+    vertex_offset = 0
+
+    for link in robot.findall("link"):
+        link_name = link.get("name", "")
+        link_transform = transforms.get(link_name, np.eye(4, dtype=np.float32))
+        for collision_index, collision in enumerate(link.findall("collision")):
+            geometry = collision.find("geometry")
+            if geometry is None:
+                continue
+            collision_name = collision.get("name", f"collision_{collision_index}")
+            box = geometry.find("box")
+            cylinder = geometry.find("cylinder")
+            if box is not None and box.get("size"):
+                size = np.asarray([float(value) for value in box.get("size", "").split()], dtype=np.float32)
+                mesh_vertices, mesh_faces = _box_mesh(size)
+            elif cylinder is not None:
+                mesh_vertices, mesh_faces = _cylinder_mesh(
+                    radius=float(cylinder.get("radius", "0.1")),
+                    length=float(cylinder.get("length", "0.1")),
+                )
+            else:
+                continue
+
+            collision_transform = link_transform @ _transform_from_origin(collision.find("origin"))
+            vertices.append(_apply_transform(mesh_vertices, collision_transform))
+            faces.append(mesh_faces + vertex_offset)
+            colors.append(np.repeat(_urdf_color(link_name, collision_name)[None, :], mesh_faces.shape[0], axis=0))
+            vertex_offset += mesh_vertices.shape[0]
+
+    if not vertices:
+        raise ValueError(f"No collision geometry found in {urdf_path}")
+    return np.concatenate(vertices, axis=0), np.concatenate(faces, axis=0), np.concatenate(colors, axis=0)
+
+
 def _look_at_basis(camera: np.ndarray, target: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     world_up = np.array([0.0, 0.0, 1.0], dtype=np.float32)
     forward = target - camera
@@ -229,7 +409,9 @@ def _render_frame(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--mode", choices=("visual", "training-collision"), default="visual")
     parser.add_argument("--obj", type=Path, default=_default_obj_path())
+    parser.add_argument("--urdf", type=Path, default=_default_urdf_path())
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
@@ -238,9 +420,14 @@ def main() -> int:
     parser.add_argument("--turns", type=float, default=2.0)
     args = parser.parse_args()
 
-    vertices, uvs, triangles, materials = _load_obj(args.obj)
-    face_ids = np.asarray([triangle.vertex_ids for triangle in triangles], dtype=np.int32)
-    face_colors = _triangle_colors(triangles, uvs, materials, _load_textures(materials))
+    if args.mode == "training-collision":
+        vertices, face_ids, face_colors = _load_urdf_collision_mesh(args.urdf)
+        source = args.urdf
+    else:
+        vertices, uvs, triangles, materials = _load_obj(args.obj)
+        face_ids = np.asarray([triangle.vertex_ids for triangle in triangles], dtype=np.int32)
+        face_colors = _triangle_colors(triangles, uvs, materials, _load_textures(materials))
+        source = args.obj
 
     bounds_min = vertices.min(axis=0)
     bounds_max = vertices.max(axis=0)
@@ -272,7 +459,9 @@ def main() -> int:
             )
 
     print(f"Wrote {args.output}")
-    print(f"Frames: {frame_count}, triangles: {len(triangles)}, vertices: {len(vertices)}")
+    print(f"Mode: {args.mode}")
+    print(f"Source: {source}")
+    print(f"Frames: {frame_count}, triangles: {len(face_ids)}, vertices: {len(vertices)}")
     return 0
 
 
