@@ -1,14 +1,16 @@
 from isaaclab.managers import EventTermCfg as EventTerm
+from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.utils import configclass
+from isaaclab_rl.rsl_rl import RslRlPpoAlgorithmCfg
 
 from unitree_rl_lab.assets.objects.wheelchair import ACTIVE_MANUAL_WHEELCHAIR_CFG
 from unitree_rl_lab.tasks.locomotion import mdp
 from unitree_rl_lab.tasks.locomotion.agents.rsl_rl_ppo_cfg import BasePPORunnerCfg
 
-from .velocity_env_cfg import RewardsCfg, RobotEnvCfg, RobotSceneCfg
+from .velocity_env_cfg import ObservationsCfg, RewardsCfg, RobotEnvCfg, RobotSceneCfg
 
 
 WHEELCHAIR_HANDLE_TARGETS_B = [
@@ -397,6 +399,65 @@ class DynamicWheelchairPushRewardsCfg(WheelchairPushRewardsCfg):
 
 
 @configclass
+class DynamicWheelchairPushObservedObservationsCfg(ObservationsCfg):
+    """Policy and critic observations that expose the passive wheelchair state."""
+
+    @configclass
+    class PolicyCfg(ObservationsCfg.PolicyCfg):
+        wheelchair_root_state = ObsTerm(
+            func=mdp.wheelchair_root_state_b,
+            clip=(-5.0, 5.0),
+            params={
+                "robot_cfg": SceneEntityCfg("robot"),
+                "wheelchair_cfg": SceneEntityCfg("wheelchair"),
+            },
+        )
+        wheelchair_handle_state = ObsTerm(
+            func=mdp.wheelchair_handle_state_b,
+            clip=(-3.0, 3.0),
+            params={
+                "robot_cfg": SceneEntityCfg(
+                    "robot",
+                    body_names=[
+                        "left_wrist_yaw_link",
+                        "right_wrist_yaw_link",
+                    ],
+                ),
+                "wheelchair_cfg": SceneEntityCfg("wheelchair", body_names=DYNAMIC_WHEELCHAIR_HANDLE_BODY_NAMES),
+            },
+        )
+
+    policy: PolicyCfg = PolicyCfg()
+
+    @configclass
+    class CriticCfg(ObservationsCfg.CriticCfg):
+        wheelchair_root_state = ObsTerm(
+            func=mdp.wheelchair_root_state_b,
+            clip=(-5.0, 5.0),
+            params={
+                "robot_cfg": SceneEntityCfg("robot"),
+                "wheelchair_cfg": SceneEntityCfg("wheelchair"),
+            },
+        )
+        wheelchair_handle_state = ObsTerm(
+            func=mdp.wheelchair_handle_state_b,
+            clip=(-3.0, 3.0),
+            params={
+                "robot_cfg": SceneEntityCfg(
+                    "robot",
+                    body_names=[
+                        "left_wrist_yaw_link",
+                        "right_wrist_yaw_link",
+                    ],
+                ),
+                "wheelchair_cfg": SceneEntityCfg("wheelchair", body_names=DYNAMIC_WHEELCHAIR_HANDLE_BODY_NAMES),
+            },
+        )
+
+    critic: CriticCfg = CriticCfg()
+
+
+@configclass
 class DynamicWheelchairPushRobotEnvCfg(WheelchairPushRobotEnvCfg):
     """Trainable wheelchair-push task with a dynamic passive wheelchair in the scene.
 
@@ -455,3 +516,44 @@ class DynamicWheelchairPushRobotPlayEnvCfg(DynamicWheelchairPushRobotEnvCfg):
 class DynamicWheelchairPushPPORunnerCfg(BasePPORunnerCfg):
     experiment_name = "unitree_g1_29dof_wheelchair_dynamic_push"
     max_iterations = 5000
+
+
+@configclass
+class DynamicWheelchairPushObservedRobotEnvCfg(DynamicWheelchairPushRobotEnvCfg):
+    """Dynamic wheelchair-push task where the policy can observe the wheelchair."""
+
+    observations: DynamicWheelchairPushObservedObservationsCfg = DynamicWheelchairPushObservedObservationsCfg()
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.commands.base_velocity.ranges.lin_vel_x = (0.15, 0.35)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (0.15, 0.55)
+
+
+@configclass
+class DynamicWheelchairPushObservedRobotPlayEnvCfg(DynamicWheelchairPushObservedRobotEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+        self.commands.base_velocity.ranges.lin_vel_x = (0.3, 0.3)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (0.3, 0.3)
+
+
+@configclass
+class DynamicWheelchairPushObservedPPORunnerCfg(BasePPORunnerCfg):
+    experiment_name = "unitree_g1_29dof_wheelchair_dynamic_push_observed"
+    max_iterations = 5000
+    algorithm = RslRlPpoAlgorithmCfg(
+        value_loss_coef=1.0,
+        use_clipped_value_loss=True,
+        clip_param=0.1,
+        entropy_coef=0.005,
+        num_learning_epochs=2,
+        num_mini_batches=4,
+        learning_rate=1.0e-4,
+        schedule="adaptive",
+        gamma=0.99,
+        lam=0.95,
+        desired_kl=0.005,
+        max_grad_norm=0.5,
+    )
