@@ -998,6 +998,26 @@ class LeftHandRelaxedBrakedDynamicWheelchairStandingAttachedRobotEnvCfg(
 
 
 @configclass
+class FixedBaseRelaxedWheelchairStandingAttachedRobotEnvCfg(
+    RelaxedBrakedDynamicWheelchairStandingAttachedRobotEnvCfg
+):
+    """Hands attached to handles with relaxed arm control while the wheelchair root is fixed."""
+
+    scene: FixedBaseDynamicWheelchairPushSceneCfg = FixedBaseDynamicWheelchairPushSceneCfg(
+        num_envs=2048, env_spacing=4.0
+    )
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.rewards.wheelchair_track_forward_velocity.weight = 0.0
+        self.rewards.wheelchair_lateral_velocity.weight = 0.0
+        self.rewards.wheelchair_yaw_velocity.weight = 0.0
+        self.rewards.wheelchair_tilt.weight = 0.0
+        self.rewards.wheelchair_xy_velocity.weight = 0.0
+        self.rewards.wheelchair_invalid_contact.weight = 0.0
+
+
+@configclass
 class BrakedStationaryDynamicWheelchairStandingAttachedRobotPlayEnvCfg(
     BrakedStationaryDynamicWheelchairStandingAttachedRobotEnvCfg
 ):
@@ -1018,6 +1038,15 @@ class RelaxedBrakedDynamicWheelchairStandingAttachedRobotPlayEnvCfg(
 @configclass
 class LeftHandRelaxedBrakedDynamicWheelchairStandingAttachedRobotPlayEnvCfg(
     LeftHandRelaxedBrakedDynamicWheelchairStandingAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class FixedBaseRelaxedWheelchairStandingAttachedRobotPlayEnvCfg(
+    FixedBaseRelaxedWheelchairStandingAttachedRobotEnvCfg
 ):
     def __post_init__(self):
         super().__post_init__()
@@ -1097,6 +1126,13 @@ class RelaxedBrakedDynamicWheelchairStandingAttachedPPORunnerCfg(
     DynamicWheelchairStandingAttachedPPORunnerCfg
 ):
     experiment_name = "unitree_g1_29dof_wheelchair_relaxed_stand_attached"
+
+
+@configclass
+class FixedBaseRelaxedWheelchairStandingAttachedPPORunnerCfg(
+    DynamicWheelchairStandingAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_fixed_relaxed_stand_attached"
 
 
 @configclass
