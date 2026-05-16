@@ -206,6 +206,24 @@ def wheelchair_wheel_height_l2(
     return torch.mean(torch.square(height_error), dim=-1)
 
 
+def root_lin_vel_xy_l2(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalize root XY linear velocity for any scene articulation."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    return torch.sum(torch.square(asset.data.root_lin_vel_w[:, :2]), dim=-1)
+
+
+def root_ang_vel_z_l2(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalize root yaw angular velocity for any scene articulation."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    return torch.square(asset.data.root_ang_vel_w[:, 2])
+
+
 def filtered_contact_presence(
     env: ManagerBasedRLEnv,
     sensor_names: list[str],
