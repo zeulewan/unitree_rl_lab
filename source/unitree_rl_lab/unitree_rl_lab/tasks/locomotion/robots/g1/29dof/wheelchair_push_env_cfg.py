@@ -39,6 +39,19 @@ WHEELCHAIR_ARM_JOINT_POSE = {
 """Warm-start arm pose placing the rubber hand bodies near the wheelchair handle targets."""
 
 
+G1_NEUTRAL_ARM_JOINT_POSE = {
+    ".*_shoulder_pitch_joint": 0.3,
+    "left_shoulder_roll_joint": 0.25,
+    "right_shoulder_roll_joint": -0.25,
+    ".*_elbow_joint": 0.97,
+    "left_wrist_roll_joint": 0.15,
+    "right_wrist_roll_joint": -0.15,
+    ".*_wrist_pitch_joint": 0.0,
+    ".*_wrist_yaw_joint": 0.0,
+}
+"""Default G1 arm pose used by the base walking/standing checkpoint."""
+
+
 DYNAMIC_WHEELCHAIR_INIT_POS = (0.728, 0.0, 0.0)
 """Wheelchair root pose that aligns the URDF handle frames with the G1 rubber-hand start pose."""
 
@@ -739,6 +752,15 @@ def _configure_dynamic_wheelchair_standing_pretrain(env_cfg):
     env_cfg.rewards.wrist_joint_deviation.weight = -0.5
 
 
+def _restore_neutral_arm_start_pose(env_cfg):
+    """Restore the base G1 neutral arm reset pose after wheelchair configs set handle arms."""
+
+    for joint_name in WHEELCHAIR_ARM_JOINT_POSE:
+        env_cfg.scene.robot.init_state.joint_pos.pop(joint_name, None)
+
+    env_cfg.scene.robot.init_state.joint_pos.update(G1_NEUTRAL_ARM_JOINT_POSE)
+
+
 @configclass
 class DynamicWheelchairStandingObservedRobotEnvCfg(DynamicWheelchairPushObservedRobotEnvCfg):
     """Standing-only pretrain with wheelchair observations but no hand-handle joint."""
@@ -748,6 +770,31 @@ class DynamicWheelchairStandingObservedRobotEnvCfg(DynamicWheelchairPushObserved
     def __post_init__(self):
         super().__post_init__()
         _configure_dynamic_wheelchair_standing_pretrain(self)
+
+
+@configclass
+class DynamicWheelchairStandingObservedNeutralRobotEnvCfg(DynamicWheelchairStandingObservedRobotEnvCfg):
+    """Wheelchair-observed standing bridge that keeps the base neutral arm start pose."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        _restore_neutral_arm_start_pose(self)
+
+        self.actions.JointPositionAction.scale = {
+            ".*_hip_.*|waist_.*|.*_knee_joint|.*_ankle_.*": 0.18,
+            ".*_shoulder_.*|.*_elbow_joint|.*_wrist_.*": 0.0,
+        }
+        self.rewards.joint_deviation_legs.weight = -1.0
+        self.rewards.wheelchair_handle_contact.weight = 0.0
+        self.rewards.wheelchair_invalid_contact.weight = 0.0
+        self.rewards.wrist_joint_deviation.weight = 0.0
+
+
+@configclass
+class DynamicWheelchairStandingObservedNeutralRobotPlayEnvCfg(DynamicWheelchairStandingObservedNeutralRobotEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
 
 
 @configclass
@@ -783,6 +830,11 @@ class DynamicWheelchairStandingObservedPPORunnerCfg(DynamicWheelchairPushObserve
         desired_kl=0.0002,
         max_grad_norm=0.05,
     )
+
+
+@configclass
+class DynamicWheelchairStandingObservedNeutralPPORunnerCfg(DynamicWheelchairStandingObservedPPORunnerCfg):
+    experiment_name = "unitree_g1_29dof_wheelchair_dynamic_stand_observed_neutral"
 
 
 @configclass
