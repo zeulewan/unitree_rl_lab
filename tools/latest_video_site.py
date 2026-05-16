@@ -13,10 +13,14 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
+from zoneinfo import ZoneInfo
 
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[1] / "logs" / "demos"
 TIMESTAMP_RE = re.compile(r"(20\d{6}_\d{6})")
+HONOLULU_TZ = ZoneInfo("Pacific/Honolulu")
+TORONTO_TZ = ZoneInfo("America/Toronto")
+LOCAL_TZ = datetime.now().astimezone().tzinfo
 
 
 def latest_video(root: Path) -> Path | None:
@@ -34,18 +38,24 @@ def video_info(root: Path, path: Path | None) -> dict[str, object] | None:
         rel_path = path.relative_to(root)
     except ValueError:
         rel_path = path
-    created_at = datetime.fromtimestamp(stat.st_mtime)
+    created_at = datetime.fromtimestamp(stat.st_mtime).astimezone()
     for part in (path.parent.name, path.name):
         match = TIMESTAMP_RE.search(part)
         if match:
-            created_at = datetime.strptime(match.group(1), "%Y%m%d_%H%M%S")
+            created_at = datetime.strptime(match.group(1), "%Y%m%d_%H%M%S").replace(tzinfo=LOCAL_TZ)
             break
+    created_honolulu = created_at.astimezone(HONOLULU_TZ)
+    created_toronto = created_at.astimezone(TORONTO_TZ)
     return {
         "name": path.name,
         "path": str(path),
         "relative_path": str(rel_path),
         "mtime": stat.st_mtime,
         "created": created_at.isoformat(timespec="seconds"),
+        "created_honolulu": created_honolulu.strftime("%Y-%m-%d %H:%M:%S HST"),
+        "created_honolulu_iso": created_honolulu.isoformat(timespec="seconds"),
+        "created_toronto": created_toronto.strftime("%Y-%m-%d %H:%M:%S %Z"),
+        "created_toronto_iso": created_toronto.isoformat(timespec="seconds"),
         "size_bytes": stat.st_size,
         "size_mb": round(stat.st_size / (1024 * 1024), 2),
     }
@@ -71,7 +81,8 @@ def page(title: str, root: Path, info: dict[str, object] | None) -> bytes:
           <video controls autoplay muted playsinline src="{video_src}"></video>
           <dl>
             <div><dt>File</dt><dd>{html.escape(str(info["relative_path"]))}</dd></div>
-            <div><dt>Created</dt><dd>{html.escape(str(info["created"]))}</dd></div>
+            <div><dt>Created (Honolulu)</dt><dd>{html.escape(str(info["created_honolulu"]))}</dd></div>
+            <div><dt>Created (Toronto)</dt><dd>{html.escape(str(info["created_toronto"]))}</dd></div>
             <div><dt>Size</dt><dd>{info["size_mb"]} MB</dd></div>
           </dl>
         </main>
@@ -146,7 +157,7 @@ def page(title: str, root: Path, info: dict[str, object] | None) -> bytes:
     }}
     dl div {{
       display: grid;
-      grid-template-columns: 86px minmax(0, 1fr);
+      grid-template-columns: 150px minmax(0, 1fr);
       gap: 12px;
     }}
     dt {{
