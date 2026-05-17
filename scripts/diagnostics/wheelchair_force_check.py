@@ -8,6 +8,8 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
+from pathlib import Path
 
 from isaaclab.app import AppLauncher
 
@@ -20,6 +22,35 @@ parser.add_argument(
 )
 parser.add_argument("--num-envs", type=int, default=10, help="Number of environments to simulate.")
 parser.add_argument("--steps", type=int, default=400, help="Number of control steps to sample.")
+parser.add_argument("--video", action="store_true", default=False, help="Record a video of the scripted force check.")
+parser.add_argument(
+    "--video-dir",
+    type=Path,
+    default=None,
+    help="Directory for recorded video. Defaults to logs/demos/wheelchair-force-check_<timestamp>.",
+)
+parser.add_argument(
+    "--camera-eye-offset",
+    type=float,
+    nargs=3,
+    default=(-3.2, -2.6, 1.7),
+    metavar=("X", "Y", "Z"),
+    help="Camera eye offset from the wheelchair root when recording video.",
+)
+parser.add_argument(
+    "--camera-target-offset",
+    type=float,
+    nargs=3,
+    default=(0.25, 0.0, 0.55),
+    metavar=("X", "Y", "Z"),
+    help="Camera target offset from the wheelchair root when recording video.",
+)
+parser.add_argument(
+    "--camera-orbit-deg",
+    type=float,
+    default=0.0,
+    help="Yaw degrees to rotate the camera around the wheelchair over the recorded clip.",
+)
 parser.add_argument(
     "--force",
     type=float,
@@ -56,11 +87,14 @@ parser.add_argument(
 
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
+if args_cli.video:
+    args_cli.enable_cameras = True
 
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 import gymnasium as gym
+import math
 import torch
 
 import isaaclab_tasks  # noqa: F401
@@ -116,6 +150,38 @@ def _print_stats(name: str, tensor: torch.Tensor, unit: str = "") -> None:
     )
 
 
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "logs" / "demos").exists():
+            return parent
+    return Path.cwd()
+
+
+def _video_dir() -> Path:
+    if args_cli.video_dir is not None:
+        return args_cli.video_dir
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return _repo_root() / "logs" / "demos" / f"wheelchair-force-check_{timestamp}"
+
+
+def _set_follow_camera(base_env, wheelchair, step: int) -> None:
+    if not args_cli.video:
+        return
+    root_pos = wheelchair.data.root_pos_w[0].detach().cpu()
+    eye_offset = torch.tensor(args_cli.camera_eye_offset, dtype=root_pos.dtype)
+    target_offset = torch.tensor(args_cli.camera_target_offset, dtype=root_pos.dtype)
+    if args_cli.camera_orbit_deg:
+        progress = min(1.0, max(0.0, step / max(1, args_cli.steps)))
+        angle = math.radians(args_cli.camera_orbit_deg) * progress
+        cos_angle = math.cos(angle)
+        sin_angle = math.sin(angle)
+        offset_x = float(eye_offset[0])
+        offset_y = float(eye_offset[1])
+        eye_offset[0] = cos_angle * offset_x - sin_angle * offset_y
+        eye_offset[1] = sin_angle * offset_x + cos_angle * offset_y
+    base_env.sim.set_camera_view((root_pos + eye_offset).tolist(), (root_pos + target_offset).tolist())
+
+
 def main() -> None:
     env_cfg = parse_env_cfg(
         args_cli.task,
@@ -128,7 +194,20 @@ def main() -> None:
     _move_robot_away(env_cfg)
     _disable_fall_terminations(env_cfg)
 
-    env = gym.make(args_cli.task, cfg=env_cfg)
+    env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+    video_dir = None
+    if args_cli.video:
+        video_dir = _video_dir()
+        video_dir.mkdir(parents=True, exist_ok=True)
+        env = gym.wrappers.RecordVideo(
+            env,
+            video_folder=str(video_dir),
+            step_trigger=lambda step: step == 0,
+            video_length=args_cli.steps,
+            name_prefix="wheelchair-force-check",
+            disable_logger=True,
+        )
+        print(f"[INFO] Recording scripted force video to: {video_dir}", flush=True)
     base_env = env.unwrapped
     env.reset()
 
@@ -159,8 +238,10 @@ def main() -> None:
     x_axis = torch.tensor([1.0, 0.0, 0.0], device=base_env.device, dtype=torch.float32).repeat(base_env.num_envs, 1)
     with torch.inference_mode():
         wheelchair.set_external_force_and_torque(forces=forces, torques=torques, body_ids=body_ids, is_global=True)
-        for _ in range(args_cli.steps):
+        _set_follow_camera(base_env, wheelchair, 0)
+        for step in range(args_cli.steps):
             env.step(actions)
+            _set_follow_camera(base_env, wheelchair, step + 1)
             forward_samples.append(wheelchair.data.root_lin_vel_w[:, 0].detach().cpu())
             lateral_samples.append(wheelchair.data.root_lin_vel_w[:, 1].detach().cpu())
             yaw_samples.append(wheelchair.data.root_ang_vel_w[:, 2].detach().cpu())
@@ -195,6 +276,10 @@ def main() -> None:
     )
 
     env.close()
+    if video_dir is not None:
+        videos = sorted(video_dir.glob("*.mp4"), key=lambda path: path.stat().st_mtime)
+        if videos:
+            print(f"[INFO] Video: {videos[-1]}", flush=True)
 
 
 if __name__ == "__main__":
