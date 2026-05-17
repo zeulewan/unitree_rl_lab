@@ -517,7 +517,14 @@ def main():
             env.close()
             return
     _set_follow_camera(base_env, timestep=0)
-    speed_samples = {"forward": [], "lateral": [], "yaw": [], "command_x": []}
+    speed_samples = {
+        "forward": [],
+        "lateral": [],
+        "yaw": [],
+        "centerline_y": [],
+        "heading_y": [],
+        "command_x": [],
+    }
     timestep = 0
     # simulate environment
     while simulation_app.is_running():
