@@ -783,6 +783,93 @@ class RelaxedDynamicWheelchairPushAttachedPPORunnerCfg(DynamicWheelchairPushObse
 
 
 @configclass
+class MinimalVelocityDynamicWheelchairPushAttachedRobotEnvCfg(RelaxedDynamicWheelchairPushAttachedRobotEnvCfg):
+    """Diagnostic attached-hands push task with only wheelchair forward velocity reward active."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.commands.base_velocity.ranges.lin_vel_x = (0.08, 0.18)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (0.05, 0.24)
+        self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
+        self.commands.base_velocity.limit_ranges.lin_vel_y = (0.0, 0.0)
+        self.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
+        self.commands.base_velocity.limit_ranges.ang_vel_z = (0.0, 0.0)
+        self.commands.base_velocity.rel_standing_envs = 0.0
+        self.commands.base_velocity.rel_heading_envs = 0.0
+        self.commands.base_velocity.heading_command = False
+
+        self.terminations.base_height.params["minimum_height"] = 0.30
+        self.terminations.bad_orientation.params["limit_angle"] = 1.20
+
+        self.actions.JointPositionAction.scale = {
+            ".*_hip_.*|.*_knee_joint|.*_ankle_.*": 0.22,
+            "waist_.*": 0.25,
+            ".*_shoulder_.*|.*_elbow_joint": 0.08,
+            ".*_wrist_.*": 0.02,
+        }
+
+        for reward_name in (
+            "track_lin_vel_xy",
+            "track_ang_vel_z",
+            "alive",
+            "base_linear_velocity",
+            "base_angular_velocity",
+            "joint_vel",
+            "joint_acc",
+            "action_rate",
+            "dof_pos_limits",
+            "energy",
+            "joint_deviation_arms",
+            "joint_deviation_waists",
+            "joint_deviation_legs",
+            "flat_orientation_l2",
+            "base_height",
+            "gait",
+            "feet_slide",
+            "feet_clearance",
+            "undesired_contacts",
+            "hand_handle_position",
+            "hand_handle_position_l2",
+            "dynamic_hand_handle_position",
+            "dynamic_hand_handle_position_l2",
+            "wheelchair_forward_progress",
+            "wheelchair_lateral_velocity",
+            "wheelchair_forward_line",
+            "wheelchair_yaw_velocity",
+            "wheelchair_root_heading",
+            "wheelchair_tilt",
+            "wheelchair_wheel_ground_height",
+            "wheelchair_handle_contact",
+            "hand_handle_axis_alignment",
+            "wrist_joint_deviation",
+            "wheelchair_invalid_contact",
+        ):
+            if hasattr(self.rewards, reward_name):
+                getattr(self.rewards, reward_name).weight = 0.0
+
+        self.rewards.wheelchair_track_forward_velocity.weight = 6.0
+        self.rewards.wheelchair_track_forward_velocity.params["std"] = 0.05
+
+
+@configclass
+class MinimalVelocityDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    MinimalVelocityDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+        self.commands.base_velocity.ranges.lin_vel_x = (0.14, 0.14)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (0.14, 0.14)
+
+
+@configclass
+class MinimalVelocityDynamicWheelchairPushAttachedPPORunnerCfg(RelaxedDynamicWheelchairPushAttachedPPORunnerCfg):
+    experiment_name = "unitree_g1_29dof_wheelchair_minimal_velocity_push_attached"
+    max_iterations = 1000
+
+
+@configclass
 class StraightDynamicWheelchairPushAttachedRobotEnvCfg(RelaxedDynamicWheelchairPushAttachedRobotEnvCfg):
     """Straight-line correction phase for the attached wheelchair push task."""
 
