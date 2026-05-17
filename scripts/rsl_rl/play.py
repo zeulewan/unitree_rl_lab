@@ -248,14 +248,23 @@ def _print_hand_handle_offsets(env):
         ).reshape_as(offset_w)
         env_index = 0
         print("[INFO] Hand-handle startup offsets for env 0:", flush=True)
+        stage = omni.usd.get_context().get_stage()
         for side_index, side_name in enumerate(("left", "right")):
+            joint_name = f"{side_name}_hand_to_handle_anchor_joint"
+            joint_prim = stage.GetPrimAtPath(f"/World/envs/env_0/HandHandleFixedJoints/{joint_name}")
+            joint_local_pos0 = None
+            if joint_prim.IsValid():
+                local_pos0_attr = joint_prim.GetAttribute("physics:localPos0")
+                if local_pos0_attr.IsValid():
+                    joint_local_pos0 = list(local_pos0_attr.Get())
             print(
                 "[INFO] "
                 f"{side_name}: handle_minus_hand_w={offset_w[env_index, side_index].detach().cpu().tolist()} "
                 f"error_m={float(error[env_index, side_index].detach().cpu()):.6f} "
                 f"handle_minus_grip_w={grip_offset_w[env_index, side_index].detach().cpu().tolist()} "
                 f"grip_error_m={float(grip_error[env_index, side_index].detach().cpu()):.6f} "
-                f"suggested_grip_local={suggested_grip_offsets_b[env_index, side_index].detach().cpu().tolist()}",
+                f"suggested_grip_local={suggested_grip_offsets_b[env_index, side_index].detach().cpu().tolist()} "
+                f"joint_local_pos0={joint_local_pos0}",
                 flush=True,
             )
         print(f"[INFO] robot_root_w={robot.data.root_pos_w[env_index].detach().cpu().tolist()}", flush=True)
