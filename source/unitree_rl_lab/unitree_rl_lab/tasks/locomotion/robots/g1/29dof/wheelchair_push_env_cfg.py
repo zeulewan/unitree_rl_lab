@@ -10,6 +10,7 @@ from unitree_rl_lab.assets.objects.wheelchair import (
     ACTIVE_MANUAL_WHEELCHAIR_BRAKED_CFG,
     ACTIVE_MANUAL_WHEELCHAIR_CFG,
     ACTIVE_MANUAL_WHEELCHAIR_FIXED_BASE_CFG,
+    ACTIVE_MANUAL_WHEELCHAIR_NO_COLLISION_CFG,
 )
 from unitree_rl_lab.tasks.locomotion import mdp
 from unitree_rl_lab.tasks.locomotion.agents.rsl_rl_ppo_cfg import BasePPORunnerCfg
@@ -357,6 +358,14 @@ class BrakedDynamicWheelchairPushSceneCfg(DynamicWheelchairPushSceneCfg):
     """Wheelchair scene with passive wheel/caster braking but a free root."""
 
     wheelchair = ACTIVE_MANUAL_WHEELCHAIR_BRAKED_CFG.replace(prim_path="{ENV_REGEX_NS}/Wheelchair")
+    wheelchair.init_state.pos = DYNAMIC_WHEELCHAIR_INIT_POS
+
+
+@configclass
+class NoCollisionDynamicWheelchairPushSceneCfg(DynamicWheelchairPushSceneCfg):
+    """Wheelchair scene that preserves handles/state but disables chair collisions."""
+
+    wheelchair = ACTIVE_MANUAL_WHEELCHAIR_NO_COLLISION_CFG.replace(prim_path="{ENV_REGEX_NS}/Wheelchair")
     wheelchair.init_state.pos = DYNAMIC_WHEELCHAIR_INIT_POS
 
 
@@ -986,6 +995,11 @@ class MinimalXRailProgressDynamicWheelchairPushAttachedRobotEnvCfg(
     MinimalYawLockedVelocityDynamicWheelchairPushAttachedRobotEnvCfg
 ):
     """X-rail wheelchair push scaffold with only forward progress rewarded."""
+
+    scene: NoCollisionDynamicWheelchairPushSceneCfg = NoCollisionDynamicWheelchairPushSceneCfg(
+        num_envs=2048,
+        env_spacing=4.0,
+    )
 
     def __post_init__(self):
         super().__post_init__()

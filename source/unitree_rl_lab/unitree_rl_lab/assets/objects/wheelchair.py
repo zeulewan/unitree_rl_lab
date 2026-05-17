@@ -72,3 +72,9 @@ ACTIVE_MANUAL_WHEELCHAIR_BRAKED_CFG.spawn.joint_drive.gains = sim_utils.UrdfConv
     stiffness=4.0,
     damping=0.0,
 )
+
+ACTIVE_MANUAL_WHEELCHAIR_NO_COLLISION_CFG = copy.deepcopy(ACTIVE_MANUAL_WHEELCHAIR_CFG)
+ACTIVE_MANUAL_WHEELCHAIR_NO_COLLISION_CFG.spawn.collision_props = sim_utils.CollisionPropertiesCfg(
+    collision_enabled=False
+)
+ACTIVE_MANUAL_WHEELCHAIR_NO_COLLISION_CFG.spawn.rigid_props.disable_gravity = True
