@@ -46,9 +46,9 @@ def _g1_29dof_urdf_with_hand_collisions() -> str:
         if link.find("collision[@name='palm_collision']") is not None:
             continue
         collision = ET.SubElement(link, "collision", {"name": "palm_collision"})
-        ET.SubElement(collision, "origin", {"xyz": "0.054 0 0", "rpy": "0 0 0"})
+        ET.SubElement(collision, "origin", {"xyz": "0.055 0 0.005", "rpy": "0 0 0"})
         geometry = ET.SubElement(collision, "geometry")
-        ET.SubElement(geometry, "box", {"size": "0.090 0.060 0.040"})
+        ET.SubElement(geometry, "box", {"size": "0.070 0.035 0.030"})
 
     ET.indent(tree, space="  ")
     output_urdf = tmp_dir / "g1_29dof_rev_1_0_hand_collision.urdf"
