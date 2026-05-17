@@ -9,6 +9,8 @@ Reference: https://github.com/unitreerobotics/unitree_ros
 """
 
 import os
+import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import IdealPDActuatorCfg, ImplicitActuatorCfg
@@ -19,6 +21,39 @@ from unitree_rl_lab.assets.robots import unitree_actuators
 
 UNITREE_MODEL_DIR = "path/to/unitree_model"  # Replace with the actual path to your unitree_model directory
 UNITREE_ROS_DIR = "/home/zeul/GIT/unitree_ros"  # Replace with the actual path to your unitree_ros package
+
+
+def _g1_29dof_urdf_with_hand_collisions() -> str:
+    """Return a generated G1 URDF that adds simple collision proxies to the rubber hands."""
+
+    source_urdf = Path(UNITREE_ROS_DIR) / "robots/g1_description/g1_29dof_rev_1_0.urdf"
+    source_meshes = source_urdf.parent / "meshes"
+    tmp_dir = Path("/tmp/IsaacLab/unitree_rl_lab/g1_29dof_hand_collision")
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+
+    meshes_link = tmp_dir / "meshes"
+    if meshes_link.is_symlink() and meshes_link.resolve() != source_meshes.resolve():
+        meshes_link.unlink()
+    if not meshes_link.exists():
+        meshes_link.symlink_to(source_meshes, target_is_directory=True)
+
+    tree = ET.parse(source_urdf)
+    root = tree.getroot()
+    for link_name in ("left_rubber_hand", "right_rubber_hand"):
+        link = root.find(f"link[@name='{link_name}']")
+        if link is None:
+            raise RuntimeError(f"Could not add hand collision; missing G1 URDF link: {link_name}")
+        if link.find("collision[@name='palm_collision']") is not None:
+            continue
+        collision = ET.SubElement(link, "collision", {"name": "palm_collision"})
+        ET.SubElement(collision, "origin", {"xyz": "0.054 0 0", "rpy": "0 0 0"})
+        geometry = ET.SubElement(collision, "geometry")
+        ET.SubElement(geometry, "box", {"size": "0.090 0.060 0.040"})
+
+    ET.indent(tree, space="  ")
+    output_urdf = tmp_dir / "g1_29dof_rev_1_0_hand_collision.urdf"
+    tree.write(output_urdf, encoding="utf-8", xml_declaration=True)
+    return str(output_urdf)
 
 
 @configclass
@@ -396,7 +431,7 @@ UNITREE_G1_23DOF_CFG = UnitreeArticulationCfg(
 
 UNITREE_G1_29DOF_CFG = UnitreeArticulationCfg(
     spawn=UnitreeUrdfFileCfg(
-        asset_path=f"{UNITREE_ROS_DIR}/robots/g1_description/g1_29dof_rev_1_0.urdf",
+        asset_path=_g1_29dof_urdf_with_hand_collisions(),
     ),
     # spawn=UnitreeUsdFileCfg(
     #     usd_path=f"{UNITREE_MODEL_DIR}/G1/29dof/usd/g1_29dof_rev_1_0/g1_29dof_rev_1_0.usd",

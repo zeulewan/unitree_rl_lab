@@ -17,9 +17,16 @@ from unitree_rl_lab.tasks.locomotion.agents.rsl_rl_ppo_cfg import BasePPORunnerC
 from .velocity_env_cfg import ObservationsCfg, RewardsCfg, RobotEnvCfg, RobotSceneCfg
 
 
+HAND_GRIP_LOCAL_POSITIONS = [
+    [0.05414, -0.00372, 0.00502],
+    [0.05414, 0.00372, 0.00502],
+]
+"""Left/right local offsets from each rubber-hand body origin to the intended palm grip point."""
+
+
 WHEELCHAIR_HANDLE_TARGETS_B = [
-    [0.328, 0.24, 0.12],
-    [0.328, -0.24, 0.12],
+    [0.382, 0.24, 0.12],
+    [0.382, -0.24, 0.12],
 ]
 """Left/right handle-grip targets in the robot root frame, in meters."""
 
@@ -56,8 +63,8 @@ G1_NEUTRAL_ARM_JOINT_POSE = {
 """Default G1 arm pose used by the base walking/standing checkpoint."""
 
 
-DYNAMIC_WHEELCHAIR_INIT_POS = (0.728, 0.0, 0.0)
-"""Wheelchair root pose that aligns the URDF handle frames with the G1 rubber-hand start pose."""
+DYNAMIC_WHEELCHAIR_INIT_POS = (0.782, 0.0, 0.0)
+"""Wheelchair root pose that aligns the URDF handle frames with the G1 palm grip points."""
 
 
 DYNAMIC_WHEELCHAIR_HANDLE_BODY_NAMES = [
@@ -79,11 +86,13 @@ DYNAMIC_WHEELCHAIR_HAND_HANDLE_ATTACHMENTS = [
         "joint_name": "left_hand_to_handle_anchor_joint",
         "robot_body": "left_rubber_hand",
         "wheelchair_body": "left_handle_frame",
+        "robot_local_pos": HAND_GRIP_LOCAL_POSITIONS[0],
     },
     {
         "joint_name": "right_hand_to_handle_anchor_joint",
         "robot_body": "right_rubber_hand",
         "wheelchair_body": "right_handle_frame",
+        "robot_local_pos": HAND_GRIP_LOCAL_POSITIONS[1],
     },
 ]
 """Hand-handle joint pairs used by the attached-hands wheelchair task."""
@@ -205,6 +214,7 @@ class WheelchairPushRewardsCfg(RewardsCfg):
         params={
             "target_positions_b": WHEELCHAIR_HANDLE_TARGETS_B,
             "std": 0.08,
+            "body_local_positions": HAND_GRIP_LOCAL_POSITIONS,
             "asset_cfg": SceneEntityCfg(
                 "robot",
                 body_names=DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES,
@@ -217,6 +227,7 @@ class WheelchairPushRewardsCfg(RewardsCfg):
         weight=-2.0,
         params={
             "target_positions_b": WHEELCHAIR_HANDLE_TARGETS_B,
+            "body_local_positions": HAND_GRIP_LOCAL_POSITIONS,
             "asset_cfg": SceneEntityCfg(
                 "robot",
                 body_names=DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES,
@@ -358,6 +369,7 @@ class DynamicWheelchairPushRewardsCfg(WheelchairPushRewardsCfg):
         weight=3.0,
         params={
             "std": 0.08,
+            "robot_body_local_positions": HAND_GRIP_LOCAL_POSITIONS,
             "robot_cfg": SceneEntityCfg(
                 "robot",
                 body_names=DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES,
@@ -370,6 +382,7 @@ class DynamicWheelchairPushRewardsCfg(WheelchairPushRewardsCfg):
         func=mdp.dynamic_hand_handle_position_error_l2,
         weight=-4.0,
         params={
+            "robot_body_local_positions": HAND_GRIP_LOCAL_POSITIONS,
             "robot_cfg": SceneEntityCfg(
                 "robot",
                 body_names=DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES,
@@ -490,6 +503,7 @@ class DynamicWheelchairPushObservedObservationsCfg(ObservationsCfg):
             func=mdp.wheelchair_handle_state_b,
             clip=(-3.0, 3.0),
             params={
+                "robot_body_local_positions": HAND_GRIP_LOCAL_POSITIONS,
                 "robot_cfg": SceneEntityCfg(
                     "robot",
                     body_names=DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES,
@@ -514,6 +528,7 @@ class DynamicWheelchairPushObservedObservationsCfg(ObservationsCfg):
             func=mdp.wheelchair_handle_state_b,
             clip=(-3.0, 3.0),
             params={
+                "robot_body_local_positions": HAND_GRIP_LOCAL_POSITIONS,
                 "robot_cfg": SceneEntityCfg(
                     "robot",
                     body_names=DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES,
@@ -684,7 +699,7 @@ class RelaxedDynamicWheelchairPushAttachedRobotEnvCfg(DynamicWheelchairPushAttac
     def __post_init__(self):
         super().__post_init__()
 
-        self.events.attach_wheelchair_hands.params["mask_collisions"] = False
+        self.events.attach_wheelchair_hands.params["mask_collisions"] = True
         self.actions.JointPositionAction.scale = {
             ".*_hip_.*|waist_.*|.*_knee_joint|.*_ankle_.*": 0.18,
             ".*_shoulder_.*|.*_elbow_joint": 0.05,
@@ -749,15 +764,15 @@ class RelaxedDynamicWheelchairPushAttachedPPORunnerCfg(DynamicWheelchairPushObse
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.05,
-        entropy_coef=0.002,
+        entropy_coef=0.001,
         num_learning_epochs=2,
         num_mini_batches=4,
-        learning_rate=3.0e-5,
+        learning_rate=1.0e-5,
         schedule="adaptive",
         gamma=0.99,
         lam=0.95,
-        desired_kl=0.001,
-        max_grad_norm=0.2,
+        desired_kl=0.0005,
+        max_grad_norm=0.1,
     )
 
 
@@ -1095,7 +1110,7 @@ class FixedBaseRelaxedWheelchairStandingAttachedRobotEnvCfg(
 
     def __post_init__(self):
         super().__post_init__()
-        self.events.attach_wheelchair_hands.params["mask_collisions"] = False
+        self.events.attach_wheelchair_hands.params["mask_collisions"] = True
         self.actions.JointPositionAction.scale[".*_wrist_.*"] = 0.015
         self.rewards.wheelchair_track_forward_velocity.weight = 0.0
         self.rewards.wheelchair_lateral_velocity.weight = 0.0

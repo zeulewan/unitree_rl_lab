@@ -52,8 +52,28 @@ def joint_position_l1(
     return torch.sum(torch.abs(joint_pos - target_tensor), dim=1)
 
 
-def _body_positions_in_root_frame(asset: Articulation, body_ids: list[int]) -> torch.Tensor:
+def _body_points_w(
+    asset: Articulation,
+    body_ids: list[int],
+    local_positions: list[list[float]] | None = None,
+) -> torch.Tensor:
     body_pos_w = asset.data.body_pos_w[:, body_ids, :]
+    if local_positions is None:
+        return body_pos_w
+
+    local_pos = torch.tensor(local_positions, device=body_pos_w.device, dtype=body_pos_w.dtype).unsqueeze(0)
+    local_pos = local_pos.expand(body_pos_w.shape[0], -1, -1)
+    body_quat_w = asset.data.body_quat_w[:, body_ids, :]
+    offsets_w = quat_apply(body_quat_w.reshape(-1, 4), local_pos.reshape(-1, 3)).reshape_as(body_pos_w)
+    return body_pos_w + offsets_w
+
+
+def _body_positions_in_root_frame(
+    asset: Articulation,
+    body_ids: list[int],
+    local_positions: list[list[float]] | None = None,
+) -> torch.Tensor:
+    body_pos_w = _body_points_w(asset, body_ids, local_positions)
     body_pos_translated = body_pos_w - asset.data.root_pos_w[:, None, :]
     body_pos_b = torch.zeros_like(body_pos_translated)
     for body_index in range(body_pos_translated.shape[1]):
@@ -74,6 +94,7 @@ def hand_handle_position_error_exp(
     target_positions_b: list[list[float]],
     std: float,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    body_local_positions: list[list[float]] | None = None,
 ) -> torch.Tensor:
     """Reward keeping selected hand bodies close to fixed wheelchair-handle targets.
 
@@ -82,7 +103,7 @@ def hand_handle_position_error_exp(
     the walking checkpoint while shifting the default arm pose into a handle-grip posture.
     """
     asset: Articulation = env.scene[asset_cfg.name]
-    body_pos_b = _body_positions_in_root_frame(asset, asset_cfg.body_ids)
+    body_pos_b = _body_positions_in_root_frame(asset, asset_cfg.body_ids, body_local_positions)
     target_pos_b = torch.tensor(target_positions_b, device=env.device, dtype=body_pos_b.dtype).unsqueeze(0)
     position_error = torch.mean(torch.sum(torch.square(body_pos_b - target_pos_b), dim=-1), dim=-1)
     return torch.exp(-position_error / (std * std))
@@ -92,10 +113,11 @@ def hand_handle_position_error_l2(
     env: ManagerBasedRLEnv,
     target_positions_b: list[list[float]],
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    body_local_positions: list[list[float]] | None = None,
 ) -> torch.Tensor:
     """Penalize distance between selected hand bodies and fixed handle targets."""
     asset: Articulation = env.scene[asset_cfg.name]
-    body_pos_b = _body_positions_in_root_frame(asset, asset_cfg.body_ids)
+    body_pos_b = _body_positions_in_root_frame(asset, asset_cfg.body_ids, body_local_positions)
     target_pos_b = torch.tensor(target_positions_b, device=env.device, dtype=body_pos_b.dtype).unsqueeze(0)
     return torch.mean(torch.sum(torch.square(body_pos_b - target_pos_b), dim=-1), dim=-1)
 
@@ -105,12 +127,14 @@ def dynamic_hand_handle_position_error_exp(
     std: float,
     robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     wheelchair_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+    robot_body_local_positions: list[list[float]] | None = None,
+    wheelchair_body_local_positions: list[list[float]] | None = None,
 ) -> torch.Tensor:
     """Reward selected robot hand bodies for staying close to moving wheelchair handle bodies."""
     robot: Articulation = env.scene[robot_cfg.name]
     wheelchair: Articulation = env.scene[wheelchair_cfg.name]
-    hand_pos_w = robot.data.body_pos_w[:, robot_cfg.body_ids, :]
-    handle_pos_w = wheelchair.data.body_pos_w[:, wheelchair_cfg.body_ids, :]
+    hand_pos_w = _body_points_w(robot, robot_cfg.body_ids, robot_body_local_positions)
+    handle_pos_w = _body_points_w(wheelchair, wheelchair_cfg.body_ids, wheelchair_body_local_positions)
     position_error = torch.mean(torch.sum(torch.square(hand_pos_w - handle_pos_w), dim=-1), dim=-1)
     return torch.exp(-position_error / (std * std))
 
@@ -119,12 +143,14 @@ def dynamic_hand_handle_position_error_l2(
     env: ManagerBasedRLEnv,
     robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     wheelchair_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+    robot_body_local_positions: list[list[float]] | None = None,
+    wheelchair_body_local_positions: list[list[float]] | None = None,
 ) -> torch.Tensor:
     """Penalize distance between selected robot hand bodies and moving wheelchair handles."""
     robot: Articulation = env.scene[robot_cfg.name]
     wheelchair: Articulation = env.scene[wheelchair_cfg.name]
-    hand_pos_w = robot.data.body_pos_w[:, robot_cfg.body_ids, :]
-    handle_pos_w = wheelchair.data.body_pos_w[:, wheelchair_cfg.body_ids, :]
+    hand_pos_w = _body_points_w(robot, robot_cfg.body_ids, robot_body_local_positions)
+    handle_pos_w = _body_points_w(wheelchair, wheelchair_cfg.body_ids, wheelchair_body_local_positions)
     return torch.mean(torch.sum(torch.square(hand_pos_w - handle_pos_w), dim=-1), dim=-1)
 
 

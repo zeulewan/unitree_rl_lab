@@ -67,17 +67,35 @@ def wheelchair_handle_state_b(
     env: ManagerBasedRLEnv,
     robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     wheelchair_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+    robot_body_local_positions: list[list[float]] | None = None,
+    wheelchair_body_local_positions: list[list[float]] | None = None,
 ) -> torch.Tensor:
     """Wheelchair handle positions and hand-to-handle errors in the robot root frame."""
     robot: Articulation = env.scene[robot_cfg.name]
     wheelchair: Articulation = env.scene[wheelchair_cfg.name]
 
-    hand_pos_w = robot.data.body_pos_w[:, robot_cfg.body_ids, :]
-    handle_pos_w = wheelchair.data.body_pos_w[:, wheelchair_cfg.body_ids, :]
+    hand_pos_w = _body_points_w(robot, robot_cfg.body_ids, robot_body_local_positions)
+    handle_pos_w = _body_points_w(wheelchair, wheelchair_cfg.body_ids, wheelchair_body_local_positions)
 
     handle_pos_b = _vectors_in_robot_root_frame(robot, handle_pos_w - robot.data.root_pos_w[:, None, :])
     handle_error_b = _vectors_in_robot_root_frame(robot, handle_pos_w - hand_pos_w)
     return torch.cat((handle_pos_b.flatten(start_dim=1), handle_error_b.flatten(start_dim=1)), dim=-1)
+
+
+def _body_points_w(
+    asset: Articulation,
+    body_ids: list[int],
+    local_positions: list[list[float]] | None = None,
+) -> torch.Tensor:
+    body_pos_w = asset.data.body_pos_w[:, body_ids, :]
+    if local_positions is None:
+        return body_pos_w
+
+    local_pos = torch.tensor(local_positions, device=body_pos_w.device, dtype=body_pos_w.dtype).unsqueeze(0)
+    local_pos = local_pos.expand(body_pos_w.shape[0], -1, -1)
+    body_quat_w = asset.data.body_quat_w[:, body_ids, :]
+    offsets_w = quat_apply(body_quat_w.reshape(-1, 4), local_pos.reshape(-1, 3)).reshape_as(body_pos_w)
+    return body_pos_w + offsets_w
 
 
 def _vectors_in_robot_root_frame(robot: Articulation, vectors_w: torch.Tensor) -> torch.Tensor:

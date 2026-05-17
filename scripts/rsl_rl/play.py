@@ -137,6 +137,8 @@ import isaaclab_tasks  # noqa: F401
 from isaaclab.envs import DirectMARLEnv, multi_agent_to_single_agent
 from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
+from isaaclab.utils.math import quat_apply, quat_apply_inverse
+
 try:
     from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 except ModuleNotFoundError:
@@ -227,15 +229,33 @@ def _print_hand_handle_offsets(env):
         ]
         hand_pos_w = robot.data.body_pos_w[:, hand_ids, :]
         handle_pos_w = wheelchair.data.body_pos_w[:, handle_ids, :]
+        grip_offsets_b = torch.tensor(
+            [[0.05414, -0.00372, 0.00502], [0.05414, 0.00372, 0.00502]],
+            device=hand_pos_w.device,
+        )
+        grip_offsets_b = grip_offsets_b.expand(hand_pos_w.shape[0], -1, -1)
+        grip_pos_w = hand_pos_w + quat_apply(
+            robot.data.body_quat_w[:, hand_ids, :].reshape(-1, 4),
+            grip_offsets_b.reshape(-1, 3),
+        ).reshape_as(hand_pos_w)
         offset_w = handle_pos_w - hand_pos_w
+        grip_offset_w = handle_pos_w - grip_pos_w
         error = torch.linalg.norm(offset_w, dim=-1)
+        grip_error = torch.linalg.norm(grip_offset_w, dim=-1)
+        suggested_grip_offsets_b = quat_apply_inverse(
+            robot.data.body_quat_w[:, hand_ids, :].reshape(-1, 4),
+            offset_w.reshape(-1, 3),
+        ).reshape_as(offset_w)
         env_index = 0
         print("[INFO] Hand-handle startup offsets for env 0:", flush=True)
         for side_index, side_name in enumerate(("left", "right")):
             print(
                 "[INFO] "
                 f"{side_name}: handle_minus_hand_w={offset_w[env_index, side_index].detach().cpu().tolist()} "
-                f"error_m={float(error[env_index, side_index].detach().cpu()):.6f}",
+                f"error_m={float(error[env_index, side_index].detach().cpu()):.6f} "
+                f"handle_minus_grip_w={grip_offset_w[env_index, side_index].detach().cpu().tolist()} "
+                f"grip_error_m={float(grip_error[env_index, side_index].detach().cpu()):.6f} "
+                f"suggested_grip_local={suggested_grip_offsets_b[env_index, side_index].detach().cpu().tolist()}",
                 flush=True,
             )
         print(f"[INFO] robot_root_w={robot.data.root_pos_w[env_index].detach().cpu().tolist()}", flush=True)

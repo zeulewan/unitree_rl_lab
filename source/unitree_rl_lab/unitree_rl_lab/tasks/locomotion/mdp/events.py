@@ -31,8 +31,8 @@ def _set_joint_frame_at_body1(stage, joint: UsdPhysics.Joint, body0_path: str, b
     body0_world = Gf.Transform(cache.GetLocalToWorldTransform(stage.GetPrimAtPath(body0_path)))
     body1_world = Gf.Transform(cache.GetLocalToWorldTransform(stage.GetPrimAtPath(body1_path)))
 
-    local0 = body1_world * Gf.Transform(cache.GetLocalToWorldTransform(stage.GetPrimAtPath(body0_path)).GetInverse())
-    local1 = body1_world * Gf.Transform(cache.GetLocalToWorldTransform(stage.GetPrimAtPath(body1_path)).GetInverse())
+    local0 = Gf.Transform(body0_world.GetMatrix().GetInverse()) * body1_world
+    local1 = Gf.Transform(body1_world.GetMatrix().GetInverse()) * body1_world
 
     joint.CreateLocalPos0Attr().Set(_vec3f(local0.GetTranslation()))
     joint.CreateLocalRot0Attr().Set(_quatf(local0.GetRotation().GetQuat()))
@@ -49,6 +49,27 @@ def _set_joint_frame_at_body_origins(joint: UsdPhysics.Joint) -> None:
     joint.CreateLocalRot1Attr().Set(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
 
 
+def _set_joint_frame_at_local_offsets(
+    stage,
+    joint: UsdPhysics.Joint,
+    body0_path: str,
+    body1_path: str,
+    body0_local_pos: Sequence[float],
+    body1_local_pos: Sequence[float],
+) -> None:
+    """Attach two explicit local points instead of the rigid-body origins."""
+
+    cache = UsdGeom.XformCache()
+    body0_world = Gf.Transform(cache.GetLocalToWorldTransform(stage.GetPrimAtPath(body0_path)))
+    body1_world = Gf.Transform(cache.GetLocalToWorldTransform(stage.GetPrimAtPath(body1_path)))
+    body1_in_body0 = Gf.Transform(body0_world.GetMatrix().GetInverse()) * body1_world
+
+    joint.CreateLocalPos0Attr().Set(_vec3f(body0_local_pos))
+    joint.CreateLocalRot0Attr().Set(_quatf(body1_in_body0.GetRotation().GetQuat()))
+    joint.CreateLocalPos1Attr().Set(_vec3f(body1_local_pos))
+    joint.CreateLocalRot1Attr().Set(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
+
+
 def _mask_collision_pair(stage, body0_path: str, body1_path: str) -> None:
     filtering_pairs = UsdPhysics.FilteredPairsAPI.Apply(stage.GetPrimAtPath(body0_path))
     rel = filtering_pairs.CreateFilteredPairsRel()
@@ -60,7 +81,7 @@ def _mask_collision_pair(stage, body0_path: str, body1_path: str) -> None:
 def attach_wheelchair_hands_to_handles(
     env,
     env_ids,
-    attachments: Sequence[dict[str, str]],
+    attachments: Sequence[dict[str, object]],
     robot_prim_name: str = "Robot",
     wheelchair_prim_name: str = "Wheelchair",
     joint_root_name: str = "HandHandleFixedJoints",
@@ -102,7 +123,18 @@ def attach_wheelchair_hands_to_handles(
             joint.CreateBody0Rel().SetTargets([Sdf.Path(body0_path)])
             joint.CreateBody1Rel().SetTargets([Sdf.Path(body1_path)])
             joint.GetExcludeFromArticulationAttr().Set(True)
-            if anchor_at_body_origins:
+            robot_local_pos = attachment.get("robot_local_pos")
+            wheelchair_local_pos = attachment.get("wheelchair_local_pos")
+            if robot_local_pos is not None or wheelchair_local_pos is not None:
+                _set_joint_frame_at_local_offsets(
+                    stage,
+                    joint,
+                    body0_path,
+                    body1_path,
+                    robot_local_pos or (0.0, 0.0, 0.0),
+                    wheelchair_local_pos or (0.0, 0.0, 0.0),
+                )
+            elif anchor_at_body_origins:
                 _set_joint_frame_at_body_origins(joint)
             else:
                 _set_joint_frame_at_body1(stage, joint, body0_path, body1_path)
