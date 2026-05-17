@@ -941,8 +941,8 @@ class MinimalYawLockedVelocityDynamicWheelchairPushAttachedRobotEnvCfg(
             },
         )
 
-        self.terminations.base_height = None
-        self.terminations.bad_orientation = None
+        self.terminations.base_height.params["minimum_height"] = 0.08
+        self.terminations.bad_orientation.params["limit_angle"] = 2.40
 
         self.actions.JointPositionAction.scale = {
             ".*_hip_.*|.*_knee_joint|.*_ankle_.*": 0.35,
