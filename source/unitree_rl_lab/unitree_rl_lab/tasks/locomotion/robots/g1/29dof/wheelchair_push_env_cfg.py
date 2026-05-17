@@ -825,6 +825,55 @@ class StraightDynamicWheelchairPushAttachedPPORunnerCfg(RelaxedDynamicWheelchair
 
 
 @configclass
+class YawConstrainedDynamicWheelchairPushAttachedRobotEnvCfg(StraightDynamicWheelchairPushAttachedRobotEnvCfg):
+    """Forward-push curriculum that prevents the wheelchair from yawing off-line."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        env_step_dt = self.decimation * self.sim.dt
+        self.events.constrain_wheelchair_to_forward_rail = EventTerm(
+            func=mdp.constrain_root_to_forward_rail,
+            mode="interval",
+            interval_range_s=(env_step_dt, env_step_dt),
+            params={
+                "asset_cfg": SceneEntityCfg("wheelchair"),
+                "lateral_position": DYNAMIC_WHEELCHAIR_INIT_POS[1],
+                "yaw": 0.0,
+            },
+        )
+
+        self.commands.base_velocity.ranges.lin_vel_x = (0.08, 0.18)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (0.06, 0.24)
+
+        self.rewards.wheelchair_track_forward_velocity.weight = 4.0
+        self.rewards.wheelchair_track_forward_velocity.params["std"] = 0.1
+        self.rewards.wheelchair_forward_progress.weight = 1.0
+        self.rewards.wheelchair_forward_progress.params["max_velocity"] = 0.35
+        self.rewards.wheelchair_lateral_velocity.weight = -1.0
+        self.rewards.wheelchair_forward_line.weight = -1.0
+        self.rewards.wheelchair_yaw_velocity.weight = -1.0
+        self.rewards.wheelchair_root_heading.weight = -1.0
+
+
+@configclass
+class YawConstrainedDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    YawConstrainedDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+        self.commands.base_velocity.ranges.lin_vel_x = (0.14, 0.14)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (0.14, 0.14)
+
+
+@configclass
+class YawConstrainedDynamicWheelchairPushAttachedPPORunnerCfg(StraightDynamicWheelchairPushAttachedPPORunnerCfg):
+    experiment_name = "unitree_g1_29dof_wheelchair_relaxed_push_attached_yaw_constrained"
+    max_iterations = 1500
+
+
+@configclass
 class DynamicWheelchairStandingAttachedRewardsCfg(DynamicWheelchairPushRewardsCfg):
     """Rewards for learning to stand with hands attached before pushing."""
 

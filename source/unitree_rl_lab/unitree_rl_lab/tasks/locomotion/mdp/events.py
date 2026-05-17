@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
+import torch
+import isaaclab.utils.math as math_utils
+from isaaclab.managers import SceneEntityCfg
 from pxr import Gf, Sdf, UsdGeom, UsdPhysics
 
 
@@ -146,3 +149,36 @@ def attach_wheelchair_hands_to_handles(
         preview = ", ".join(missing_paths[:8])
         suffix = "" if len(missing_paths) <= 8 else f", ... ({len(missing_paths)} missing paths total)"
         raise RuntimeError(f"Could not create wheelchair hand attachments; missing prim paths: {preview}{suffix}")
+
+
+def constrain_root_to_forward_rail(
+    env,
+    env_ids,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+    lateral_position: float = 0.0,
+    yaw: float = 0.0,
+    zero_lateral_velocity: bool = True,
+    zero_yaw_velocity: bool = True,
+) -> None:
+    """Keep an asset on a straight lateral/yaw rail while preserving forward motion."""
+
+    asset = env.scene[asset_cfg.name]
+    if env_ids is None:
+        env_ids = torch.arange(env.num_envs, device=asset.device)
+    elif not hasattr(env_ids, "device"):
+        env_ids = torch.as_tensor(env_ids, device=asset.device, dtype=torch.long)
+
+    root_pose = torch.cat([asset.data.root_pos_w[env_ids].clone(), asset.data.root_quat_w[env_ids].clone()], dim=-1)
+    root_pose[:, 1] = env.scene.env_origins[env_ids, 1] + lateral_position
+
+    roll, pitch, _ = math_utils.euler_xyz_from_quat(root_pose[:, 3:7])
+    root_pose[:, 3:7] = math_utils.quat_from_euler_xyz(roll, pitch, torch.full_like(roll, yaw))
+
+    root_velocity = asset.data.root_vel_w[env_ids].clone()
+    if zero_lateral_velocity:
+        root_velocity[:, 1] = 0.0
+    if zero_yaw_velocity:
+        root_velocity[:, 5] = 0.0
+
+    asset.write_root_pose_to_sim(root_pose, env_ids=env_ids)
+    asset.write_root_velocity_to_sim(root_velocity, env_ids=env_ids)
