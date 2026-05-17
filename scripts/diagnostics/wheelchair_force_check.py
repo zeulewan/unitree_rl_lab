@@ -52,6 +52,12 @@ parser.add_argument(
     help="Yaw degrees to rotate the camera around the wheelchair over the recorded clip.",
 )
 parser.add_argument(
+    "--show-wheelchair-urdf-proxy",
+    action="store_true",
+    default=False,
+    help="Render the simplified wheelchair URDF proxy instead of the downloaded visual mesh.",
+)
+parser.add_argument(
     "--force",
     type=float,
     nargs=3,
@@ -164,6 +170,25 @@ def _video_dir() -> Path:
     return _repo_root() / "logs" / "demos" / f"wheelchair-force-check_{timestamp}"
 
 
+def _configure_wheelchair_proxy_visual_asset(env_cfg) -> None:
+    proxy_urdf = (
+        _repo_root()
+        / "assets"
+        / "objects"
+        / "wheelchair"
+        / "free3d_active_wheelchair"
+        / "urdf"
+        / "active_manual_wheelchair_proxy_visual.urdf"
+    )
+    wheelchair_cfg = getattr(getattr(env_cfg, "scene", None), "wheelchair", None)
+    spawn_cfg = getattr(wheelchair_cfg, "spawn", None)
+    if spawn_cfg is None or not hasattr(spawn_cfg, "asset_path"):
+        print("[WARN] Could not swap wheelchair asset for URDF proxy visuals.", flush=True)
+        return
+    spawn_cfg.asset_path = str(proxy_urdf)
+    print(f"[INFO] Using wheelchair URDF proxy visual asset: {proxy_urdf}", flush=True)
+
+
 def _set_follow_camera(base_env, wheelchair, step: int) -> None:
     if not args_cli.video:
         return
@@ -190,6 +215,8 @@ def main() -> None:
         use_fabric=not getattr(args_cli, "disable_fabric", False),
         entry_point_key="play_env_cfg_entry_point",
     )
+    if args_cli.show_wheelchair_urdf_proxy:
+        _configure_wheelchair_proxy_visual_asset(env_cfg)
     _disable_attachment_event(env_cfg)
     _move_robot_away(env_cfg)
     _disable_fall_terminations(env_cfg)

@@ -293,6 +293,12 @@ def _sample_wheelchair_speed_stats(env, samples):
         samples["forward"].append(wheelchair.data.root_lin_vel_w[:, 0].detach().cpu())
         samples["lateral"].append(wheelchair.data.root_lin_vel_w[:, 1].detach().cpu())
         samples["yaw"].append(wheelchair.data.root_ang_vel_w[:, 2].detach().cpu())
+        centerline_y = wheelchair.data.root_pos_w[:, 1] - env.unwrapped.scene.env_origins[:, 1]
+        samples["centerline_y"].append(centerline_y.detach().cpu())
+        x_axis = torch.tensor([1.0, 0.0, 0.0], device=env.unwrapped.device, dtype=wheelchair.data.root_quat_w.dtype)
+        x_axis = x_axis.expand(env.unwrapped.num_envs, 3)
+        heading_w = quat_apply(wheelchair.data.root_quat_w, x_axis)
+        samples["heading_y"].append(heading_w[:, 1].detach().cpu())
         samples["command_x"].append(command[:, 0].detach().cpu())
     except Exception as err:
         if not samples.get("warned"):
@@ -309,7 +315,10 @@ def _print_wheelchair_speed_stats(samples):
     forward = torch.cat(samples["forward"])
     lateral = torch.cat(samples["lateral"])
     yaw = torch.cat(samples["yaw"])
+    centerline_y = torch.cat(samples["centerline_y"])
+    heading_y = torch.cat(samples["heading_y"])
     command_x = torch.cat(samples["command_x"])
+    env_count = samples["command_x"][-1].numel()
     error = forward - command_x
     abs_error = torch.abs(error)
     print("[INFO] Wheelchair raw speed stats:", flush=True)
@@ -332,8 +341,18 @@ def _print_wheelchair_speed_stats(samples):
     )
     print(
         "[INFO] "
+        f"lateral_mean={lateral.mean().item():.4f}m/s "
         f"lateral_abs_mean={torch.abs(lateral).mean().item():.4f}m/s "
+        f"yaw_mean={yaw.mean().item():.4f}rad/s "
         f"yaw_abs_mean={torch.abs(yaw).mean().item():.4f}rad/s",
+        flush=True,
+    )
+    print(
+        "[INFO] "
+        f"centerline_y_mean={centerline_y.mean().item():.4f}m "
+        f"centerline_y_final_mean={centerline_y[-env_count:].mean().item():.4f}m "
+        f"heading_y_mean={heading_y.mean().item():.4f} "
+        f"heading_y_abs_mean={torch.abs(heading_y).mean().item():.4f}",
         flush=True,
     )
 
