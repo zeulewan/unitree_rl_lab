@@ -421,6 +421,12 @@ class DynamicWheelchairPushRewardsCfg(WheelchairPushRewardsCfg):
         params={"asset_cfg": SceneEntityCfg("wheelchair")},
     )
 
+    wheelchair_root_heading = RewTerm(
+        func=mdp.root_heading_lateral_l2,
+        weight=0.0,
+        params={"allowed_error": 0.03, "asset_cfg": SceneEntityCfg("wheelchair")},
+    )
+
     wheelchair_tilt = RewTerm(
         func=mdp.wheelchair_tilt_l2,
         weight=-5.0,
@@ -774,6 +780,48 @@ class RelaxedDynamicWheelchairPushAttachedPPORunnerCfg(DynamicWheelchairPushObse
         desired_kl=0.0005,
         max_grad_norm=0.1,
     )
+
+
+@configclass
+class StraightDynamicWheelchairPushAttachedRobotEnvCfg(RelaxedDynamicWheelchairPushAttachedRobotEnvCfg):
+    """Straight-line correction phase for the attached wheelchair push task."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.commands.base_velocity.ranges.lin_vel_x = (0.06, 0.16)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (0.04, 0.22)
+
+        self.rewards.track_ang_vel_z.weight = 1.0
+        self.rewards.track_ang_vel_z.params["std"] = 0.15
+        self.rewards.base_angular_velocity.weight = -0.2
+
+        self.rewards.wheelchair_track_forward_velocity.weight = 2.0
+        self.rewards.wheelchair_track_forward_velocity.params["std"] = 0.12
+        self.rewards.wheelchair_forward_progress.weight = 0.35
+        self.rewards.wheelchair_forward_progress.params["max_velocity"] = 0.3
+        self.rewards.wheelchair_lateral_velocity.weight = -8.0
+        self.rewards.wheelchair_forward_line.weight = -20.0
+        self.rewards.wheelchair_forward_line.params["allowed_error"] = 0.02
+        self.rewards.wheelchair_yaw_velocity.weight = -10.0
+        self.rewards.wheelchair_root_heading.weight = -15.0
+        self.rewards.wheelchair_root_heading.params["allowed_error"] = 0.02
+        self.rewards.wheelchair_invalid_contact.weight = -0.03
+
+
+@configclass
+class StraightDynamicWheelchairPushAttachedRobotPlayEnvCfg(StraightDynamicWheelchairPushAttachedRobotEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+        self.commands.base_velocity.ranges.lin_vel_x = (0.12, 0.12)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (0.12, 0.12)
+
+
+@configclass
+class StraightDynamicWheelchairPushAttachedPPORunnerCfg(RelaxedDynamicWheelchairPushAttachedPPORunnerCfg):
+    experiment_name = "unitree_g1_29dof_wheelchair_relaxed_push_attached_straight"
+    max_iterations = 2000
 
 
 @configclass
