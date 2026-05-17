@@ -982,6 +982,39 @@ class MinimalYawLockedVelocityDynamicWheelchairPushAttachedPPORunnerCfg(
 
 
 @configclass
+class MinimalXRailProgressDynamicWheelchairPushAttachedRobotEnvCfg(
+    MinimalYawLockedVelocityDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """X-rail wheelchair push scaffold with only forward progress rewarded."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.rewards.wheelchair_track_forward_velocity.weight = 0.0
+        self.rewards.wheelchair_forward_progress.weight = 6.0
+        self.rewards.wheelchair_forward_progress.params["max_velocity"] = 0.8
+
+
+@configclass
+class MinimalXRailProgressDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    MinimalXRailProgressDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+        self.commands.base_velocity.ranges.lin_vel_x = (0.14, 0.14)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (0.14, 0.14)
+
+
+@configclass
+class MinimalXRailProgressDynamicWheelchairPushAttachedPPORunnerCfg(
+    MinimalVelocityDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_minimal_x_rail_progress_push_attached"
+    max_iterations = 1000
+
+
+@configclass
 class StraightDynamicWheelchairPushAttachedRobotEnvCfg(RelaxedDynamicWheelchairPushAttachedRobotEnvCfg):
     """Straight-line correction phase for the attached wheelchair push task."""
 
