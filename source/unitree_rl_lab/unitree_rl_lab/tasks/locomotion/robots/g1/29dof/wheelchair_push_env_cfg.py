@@ -412,6 +412,12 @@ class DynamicWheelchairPushRewardsCfg(WheelchairPushRewardsCfg):
         params={"asset_cfg": SceneEntityCfg("wheelchair"), "max_velocity": 1.2},
     )
 
+    wheelchair_backward_velocity = RewTerm(
+        func=mdp.wheelchair_backward_velocity_l2,
+        weight=0.0,
+        params={"asset_cfg": SceneEntityCfg("wheelchair")},
+    )
+
     wheelchair_lateral_velocity = RewTerm(
         func=mdp.wheelchair_lateral_velocity_l2,
         weight=-1.0,
@@ -849,6 +855,7 @@ class MinimalVelocityDynamicWheelchairPushAttachedRobotEnvCfg(RelaxedDynamicWhee
             "dynamic_hand_handle_position",
             "dynamic_hand_handle_position_l2",
             "wheelchair_forward_progress",
+            "wheelchair_backward_velocity",
             "wheelchair_lateral_velocity",
             "wheelchair_forward_line",
             "wheelchair_yaw_velocity",
@@ -1025,6 +1032,41 @@ class MinimalXRailProgressDynamicWheelchairPushAttachedPPORunnerCfg(
     MinimalVelocityDynamicWheelchairPushAttachedPPORunnerCfg
 ):
     experiment_name = "unitree_g1_29dof_wheelchair_minimal_x_rail_progress_push_attached"
+    max_iterations = 1000
+
+
+@configclass
+class MinimalXRailVelocityProgressDynamicWheelchairPushAttachedRobotEnvCfg(
+    MinimalXRailProgressDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """X-rail wheelchair push scaffold with velocity tracking plus a backward-motion penalty."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.rewards.wheelchair_track_forward_velocity.weight = 6.0
+        self.rewards.wheelchair_track_forward_velocity.params["std"] = 0.08
+        self.rewards.wheelchair_forward_progress.weight = 1.0
+        self.rewards.wheelchair_forward_progress.params["max_velocity"] = 0.35
+        self.rewards.wheelchair_backward_velocity.weight = -10.0
+
+
+@configclass
+class MinimalXRailVelocityProgressDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    MinimalXRailVelocityProgressDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+        self.commands.base_velocity.ranges.lin_vel_x = (0.14, 0.14)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (0.14, 0.14)
+
+
+@configclass
+class MinimalXRailVelocityProgressDynamicWheelchairPushAttachedPPORunnerCfg(
+    MinimalVelocityDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_minimal_x_rail_velocity_progress_push_attached"
     max_iterations = 1000
 
 
