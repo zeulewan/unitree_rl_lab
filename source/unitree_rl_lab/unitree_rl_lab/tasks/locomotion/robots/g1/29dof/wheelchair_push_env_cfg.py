@@ -886,16 +886,16 @@ class MinimalStraightVelocityDynamicWheelchairPushAttachedRobotEnvCfg(
         super().__post_init__()
 
         self.rewards.wheelchair_track_forward_velocity.weight = 6.0
-        self.rewards.wheelchair_track_forward_velocity.params["std"] = 0.05
-        self.rewards.wheelchair_forward_progress.weight = 0.4
+        self.rewards.wheelchair_track_forward_velocity.params["std"] = 0.09
+        self.rewards.wheelchair_forward_progress.weight = 2.0
         self.rewards.wheelchair_forward_progress.params["max_velocity"] = 0.3
-        self.rewards.wheelchair_lateral_velocity.weight = -4.0
-        self.rewards.wheelchair_forward_line.weight = -25.0
+        self.rewards.wheelchair_lateral_velocity.weight = -3.0
+        self.rewards.wheelchair_forward_line.weight = -15.0
         self.rewards.wheelchair_forward_line.params["allowed_error"] = 0.03
-        self.rewards.wheelchair_yaw_velocity.weight = -3.0
-        self.rewards.wheelchair_root_heading.weight = -12.0
+        self.rewards.wheelchair_yaw_velocity.weight = -2.0
+        self.rewards.wheelchair_root_heading.weight = -8.0
         self.rewards.wheelchair_root_heading.params["allowed_error"] = 0.03
-        self.rewards.wheelchair_forward_heading.weight = -6.0
+        self.rewards.wheelchair_forward_heading.weight = -4.0
         self.rewards.wheelchair_forward_heading.params["allowed_error"] = 0.005
 
 
