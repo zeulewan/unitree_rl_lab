@@ -427,6 +427,12 @@ class DynamicWheelchairPushRewardsCfg(WheelchairPushRewardsCfg):
         params={"allowed_error": 0.03, "asset_cfg": SceneEntityCfg("wheelchair")},
     )
 
+    wheelchair_forward_heading = RewTerm(
+        func=mdp.root_forward_heading_l2,
+        weight=0.0,
+        params={"allowed_error": 0.005, "asset_cfg": SceneEntityCfg("wheelchair")},
+    )
+
     wheelchair_tilt = RewTerm(
         func=mdp.wheelchair_tilt_l2,
         weight=-5.0,
@@ -838,6 +844,7 @@ class MinimalVelocityDynamicWheelchairPushAttachedRobotEnvCfg(RelaxedDynamicWhee
             "wheelchair_forward_line",
             "wheelchair_yaw_velocity",
             "wheelchair_root_heading",
+            "wheelchair_forward_heading",
             "wheelchair_tilt",
             "wheelchair_wheel_ground_height",
             "wheelchair_handle_contact",
@@ -866,6 +873,48 @@ class MinimalVelocityDynamicWheelchairPushAttachedRobotPlayEnvCfg(
 @configclass
 class MinimalVelocityDynamicWheelchairPushAttachedPPORunnerCfg(RelaxedDynamicWheelchairPushAttachedPPORunnerCfg):
     experiment_name = "unitree_g1_29dof_wheelchair_minimal_velocity_push_attached"
+    max_iterations = 1000
+
+
+@configclass
+class MinimalStraightVelocityDynamicWheelchairPushAttachedRobotEnvCfg(
+    MinimalVelocityDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """Minimal forward-push task that adds only straightness terms to prevent circular exploits."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.rewards.wheelchair_track_forward_velocity.weight = 6.0
+        self.rewards.wheelchair_track_forward_velocity.params["std"] = 0.05
+        self.rewards.wheelchair_forward_progress.weight = 0.4
+        self.rewards.wheelchair_forward_progress.params["max_velocity"] = 0.3
+        self.rewards.wheelchair_lateral_velocity.weight = -4.0
+        self.rewards.wheelchair_forward_line.weight = -25.0
+        self.rewards.wheelchair_forward_line.params["allowed_error"] = 0.03
+        self.rewards.wheelchair_yaw_velocity.weight = -3.0
+        self.rewards.wheelchair_root_heading.weight = -12.0
+        self.rewards.wheelchair_root_heading.params["allowed_error"] = 0.03
+        self.rewards.wheelchair_forward_heading.weight = -6.0
+        self.rewards.wheelchair_forward_heading.params["allowed_error"] = 0.005
+
+
+@configclass
+class MinimalStraightVelocityDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    MinimalStraightVelocityDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+        self.commands.base_velocity.ranges.lin_vel_x = (0.14, 0.14)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (0.14, 0.14)
+
+
+@configclass
+class MinimalStraightVelocityDynamicWheelchairPushAttachedPPORunnerCfg(
+    MinimalVelocityDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_minimal_straight_velocity_push_attached"
     max_iterations = 1000
 
 

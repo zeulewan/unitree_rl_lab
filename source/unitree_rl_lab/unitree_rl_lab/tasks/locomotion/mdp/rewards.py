@@ -256,6 +256,21 @@ def root_heading_lateral_l2(
     return torch.square(heading_error)
 
 
+def root_forward_heading_l2(
+    env: ManagerBasedRLEnv,
+    allowed_error: float = 0.0,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+) -> torch.Tensor:
+    """Penalize an articulation root facing away from the world-X forward direction."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    x_axis_b = torch.tensor([1.0, 0.0, 0.0], device=env.device, dtype=asset.data.root_quat_w.dtype).expand(
+        env.num_envs, 3
+    )
+    x_axis_w = quat_apply(asset.data.root_quat_w, x_axis_b)
+    heading_error = torch.clamp((1.0 - x_axis_w[:, 0]) - allowed_error, min=0.0)
+    return torch.square(heading_error)
+
+
 def wheelchair_yaw_velocity_l2(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
