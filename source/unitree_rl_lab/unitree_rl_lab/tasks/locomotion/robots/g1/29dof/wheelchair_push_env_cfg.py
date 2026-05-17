@@ -874,6 +874,44 @@ class YawConstrainedDynamicWheelchairPushAttachedPPORunnerCfg(StraightDynamicWhe
 
 
 @configclass
+class UprightConstrainedDynamicWheelchairPushAttachedRobotEnvCfg(YawConstrainedDynamicWheelchairPushAttachedRobotEnvCfg):
+    """Forward-push curriculum that keeps the wheelchair upright on the ground rail."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.events.constrain_wheelchair_to_forward_rail.params.update(
+            {
+                "root_height": DYNAMIC_WHEELCHAIR_INIT_POS[2],
+                "roll": 0.0,
+                "pitch": 0.0,
+                "zero_vertical_velocity": True,
+                "zero_roll_pitch_velocity": True,
+            }
+        )
+
+        self.rewards.wheelchair_tilt.weight = -1.0
+        self.rewards.wheelchair_wheel_ground_height.weight = -5.0
+
+
+@configclass
+class UprightConstrainedDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    UprightConstrainedDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+        self.commands.base_velocity.ranges.lin_vel_x = (0.14, 0.14)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (0.14, 0.14)
+
+
+@configclass
+class UprightConstrainedDynamicWheelchairPushAttachedPPORunnerCfg(YawConstrainedDynamicWheelchairPushAttachedPPORunnerCfg):
+    experiment_name = "unitree_g1_29dof_wheelchair_relaxed_push_attached_upright_constrained"
+    max_iterations = 1000
+
+
+@configclass
 class DynamicWheelchairStandingAttachedRewardsCfg(DynamicWheelchairPushRewardsCfg):
     """Rewards for learning to stand with hands attached before pushing."""
 

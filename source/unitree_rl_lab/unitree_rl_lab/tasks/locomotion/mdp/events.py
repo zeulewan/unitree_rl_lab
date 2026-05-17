@@ -156,11 +156,16 @@ def constrain_root_to_forward_rail(
     env_ids,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
     lateral_position: float = 0.0,
+    root_height: float | None = None,
+    roll: float | None = None,
+    pitch: float | None = None,
     yaw: float = 0.0,
     zero_lateral_velocity: bool = True,
+    zero_vertical_velocity: bool = False,
+    zero_roll_pitch_velocity: bool = False,
     zero_yaw_velocity: bool = True,
 ) -> None:
-    """Keep an asset on a straight lateral/yaw rail while preserving forward motion."""
+    """Keep an asset on a straight rail while preserving forward motion."""
 
     asset = env.scene[asset_cfg.name]
     if env_ids is None:
@@ -170,13 +175,22 @@ def constrain_root_to_forward_rail(
 
     root_pose = torch.cat([asset.data.root_pos_w[env_ids].clone(), asset.data.root_quat_w[env_ids].clone()], dim=-1)
     root_pose[:, 1] = env.scene.env_origins[env_ids, 1] + lateral_position
+    if root_height is not None:
+        root_pose[:, 2] = env.scene.env_origins[env_ids, 2] + root_height
 
-    roll, pitch, _ = math_utils.euler_xyz_from_quat(root_pose[:, 3:7])
-    root_pose[:, 3:7] = math_utils.quat_from_euler_xyz(roll, pitch, torch.full_like(roll, yaw))
+    current_roll, current_pitch, _ = math_utils.euler_xyz_from_quat(root_pose[:, 3:7])
+    target_roll = current_roll if roll is None else torch.full_like(current_roll, roll)
+    target_pitch = current_pitch if pitch is None else torch.full_like(current_pitch, pitch)
+    root_pose[:, 3:7] = math_utils.quat_from_euler_xyz(target_roll, target_pitch, torch.full_like(current_roll, yaw))
 
     root_velocity = asset.data.root_vel_w[env_ids].clone()
     if zero_lateral_velocity:
         root_velocity[:, 1] = 0.0
+    if zero_vertical_velocity:
+        root_velocity[:, 2] = 0.0
+    if zero_roll_pitch_velocity:
+        root_velocity[:, 3] = 0.0
+        root_velocity[:, 4] = 0.0
     if zero_yaw_velocity:
         root_velocity[:, 5] = 0.0
 
