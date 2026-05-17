@@ -86,6 +86,18 @@ parser.add_argument(
     help="Print rubber-hand to wheelchair-handle offsets after reset for attached-wheelchair diagnostics.",
 )
 parser.add_argument(
+    "--print-wheelchair-speed-stats",
+    action="store_true",
+    default=False,
+    help="Print raw wheelchair velocity statistics during playback diagnostics.",
+)
+parser.add_argument(
+    "--speed-stats-steps",
+    type=int,
+    default=300,
+    help="Number of playback steps to sample when --print-wheelchair-speed-stats is set without video.",
+)
+parser.add_argument(
     "--exit-after-offset-print",
     action="store_true",
     default=False,
@@ -273,6 +285,59 @@ def _print_hand_handle_offsets(env):
         print(f"[WARN] Failed to print hand-handle offsets: {err}", flush=True)
 
 
+def _sample_wheelchair_speed_stats(env, samples):
+    """Collect raw wheelchair speed samples for policy diagnostics."""
+    try:
+        wheelchair = env.unwrapped.scene["wheelchair"]
+        command = env.unwrapped.command_manager.get_command("base_velocity")
+        samples["forward"].append(wheelchair.data.root_lin_vel_w[:, 0].detach().cpu())
+        samples["lateral"].append(wheelchair.data.root_lin_vel_w[:, 1].detach().cpu())
+        samples["yaw"].append(wheelchair.data.root_ang_vel_w[:, 2].detach().cpu())
+        samples["command_x"].append(command[:, 0].detach().cpu())
+    except Exception as err:
+        if not samples.get("warned"):
+            print(f"[WARN] Failed to sample wheelchair speed stats: {err}", flush=True)
+            samples["warned"] = True
+
+
+def _print_wheelchair_speed_stats(samples):
+    """Print raw wheelchair speed stats after playback."""
+    if not samples["forward"]:
+        print("[WARN] No wheelchair speed samples collected.", flush=True)
+        return
+
+    forward = torch.cat(samples["forward"])
+    lateral = torch.cat(samples["lateral"])
+    yaw = torch.cat(samples["yaw"])
+    command_x = torch.cat(samples["command_x"])
+    error = forward - command_x
+    abs_error = torch.abs(error)
+    print("[INFO] Wheelchair raw speed stats:", flush=True)
+    print(
+        "[INFO] "
+        f"samples={forward.numel()} "
+        f"command_x_mean={command_x.mean().item():.4f}m/s "
+        f"forward_mean={forward.mean().item():.4f}m/s "
+        f"forward_min={forward.min().item():.4f}m/s "
+        f"forward_max={forward.max().item():.4f}m/s",
+        flush=True,
+    )
+    print(
+        "[INFO] "
+        f"forward_error_mean={error.mean().item():.4f}m/s "
+        f"forward_abs_error_mean={abs_error.mean().item():.4f}m/s "
+        f"within_0.05mps={(abs_error < 0.05).float().mean().item():.3f} "
+        f"within_0.10mps={(abs_error < 0.10).float().mean().item():.3f}",
+        flush=True,
+    )
+    print(
+        "[INFO] "
+        f"lateral_abs_mean={torch.abs(lateral).mean().item():.4f}m/s "
+        f"yaw_abs_mean={torch.abs(yaw).mean().item():.4f}rad/s",
+        flush=True,
+    )
+
+
 def _repo_root() -> Path:
     for parent in Path(__file__).resolve().parents:
         if (parent / "assets" / "objects" / "wheelchair").exists():
@@ -433,6 +498,7 @@ def main():
             env.close()
             return
     _set_follow_camera(base_env, timestep=0)
+    speed_samples = {"forward": [], "lateral": [], "yaw": [], "command_x": []}
     timestep = 0
     # simulate environment
     while simulation_app.is_running():
@@ -447,16 +513,23 @@ def main():
             _set_follow_camera(base_env, timestep=timestep)
             # env stepping
             obs, _, _, _ = env.step(actions)
+            if args_cli.print_wheelchair_speed_stats:
+                _sample_wheelchair_speed_stats(base_env, speed_samples)
+        timestep += 1
         if args_cli.video:
-            timestep += 1
             # Exit the play loop after recording one video
             if timestep >= args_cli.video_start_step + args_cli.video_length:
                 break
+        elif args_cli.print_wheelchair_speed_stats and timestep >= args_cli.speed_stats_steps:
+            break
 
         # time delay for real-time evaluation
         sleep_time = dt - (time.time() - start_time)
         if args_cli.real_time and sleep_time > 0:
             time.sleep(sleep_time)
+
+    if args_cli.print_wheelchair_speed_stats:
+        _print_wheelchair_speed_stats(speed_samples)
 
     # close the simulator
     env.close()
