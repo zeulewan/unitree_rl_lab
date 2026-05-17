@@ -875,7 +875,7 @@ class YawConstrainedDynamicWheelchairPushAttachedPPORunnerCfg(StraightDynamicWhe
 
 @configclass
 class UprightConstrainedDynamicWheelchairPushAttachedRobotEnvCfg(YawConstrainedDynamicWheelchairPushAttachedRobotEnvCfg):
-    """Forward-push curriculum that keeps the wheelchair upright on the ground rail."""
+    """Forward-push curriculum that keeps the chair planted while allowing robot lean."""
 
     def __post_init__(self):
         super().__post_init__()
@@ -892,6 +892,24 @@ class UprightConstrainedDynamicWheelchairPushAttachedRobotEnvCfg(YawConstrainedD
 
         self.rewards.wheelchair_tilt.weight = -1.0
         self.rewards.wheelchair_wheel_ground_height.weight = -5.0
+
+        self.terminations.base_height.params["minimum_height"] = 0.45
+        self.terminations.bad_orientation.params["limit_angle"] = 0.9
+
+        self.actions.JointPositionAction.scale = {
+            ".*_hip_.*|.*_knee_joint|.*_ankle_.*": 0.18,
+            "waist_.*": 0.25,
+            ".*_shoulder_.*|.*_elbow_joint": 0.08,
+            ".*_wrist_.*": 0.015,
+        }
+
+        self.rewards.flat_orientation_l2.weight = -2.0
+        self.rewards.base_height.weight = -4.0
+        self.rewards.base_height.params["target_height"] = 0.72
+        self.rewards.base_linear_velocity.weight = -0.25
+        self.rewards.base_angular_velocity.weight = -0.03
+        self.rewards.joint_deviation_arms.weight = -0.01
+        self.rewards.joint_deviation_waists.weight = -0.25
 
 
 @configclass
