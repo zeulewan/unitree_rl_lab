@@ -922,7 +922,7 @@ class MinimalStraightVelocityDynamicWheelchairPushAttachedPPORunnerCfg(
 class MinimalYawLockedVelocityDynamicWheelchairPushAttachedRobotEnvCfg(
     MinimalVelocityDynamicWheelchairPushAttachedRobotEnvCfg
 ):
-    """Minimal forward-push task with the wheelchair constrained to a forward rail."""
+    """Minimal forward-push task with the wheelchair constrained to an X-axis rail."""
 
     def __post_init__(self):
         super().__post_init__()
@@ -935,8 +935,13 @@ class MinimalYawLockedVelocityDynamicWheelchairPushAttachedRobotEnvCfg(
             params={
                 "asset_cfg": SceneEntityCfg("wheelchair"),
                 "lateral_position": DYNAMIC_WHEELCHAIR_INIT_POS[1],
+                "root_height": DYNAMIC_WHEELCHAIR_INIT_POS[2],
+                "roll": 0.0,
+                "pitch": 0.0,
                 "yaw": 0.0,
                 "zero_lateral_velocity": True,
+                "zero_vertical_velocity": True,
+                "zero_roll_pitch_velocity": True,
                 "zero_yaw_velocity": True,
             },
         )
