@@ -1394,6 +1394,49 @@ class MinimalPhysXRail1mpsYawTorqueSoftObsDynamicWheelchairPushAttachedPPORunner
 
 
 @configclass
+class MinimalPhysXRail1mpsYawTorqueSoftObsStiffDynamicWheelchairPushAttachedRobotEnvCfg(
+    MinimalPhysXRail1mpsYawTorqueSoftObsDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """SoftObs task with a stiffer bounded hand-handle spring-damper."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        soft_attachment = {
+            "stiffness": 5000.0,
+            "damping": 150.0,
+            "max_force": 500.0,
+        }
+        for event_name in ("soft_attach_wheelchair_hands_reset", "soft_attach_wheelchair_hands"):
+            event = getattr(self.events, event_name, None)
+            if event is not None:
+                event.params.update(soft_attachment)
+
+        obs_attachment = {
+            **soft_attachment,
+            "force_scale": 500.0,
+        }
+        self.observations.policy.wheelchair_soft_attachment_state.params.update(obs_attachment)
+        self.observations.critic.wheelchair_soft_attachment_state.params.update(obs_attachment)
+
+
+@configclass
+class MinimalPhysXRail1mpsYawTorqueSoftObsStiffDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    MinimalPhysXRail1mpsYawTorqueSoftObsStiffDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalPhysXRail1mpsYawTorqueSoftObsStiffDynamicWheelchairPushAttachedPPORunnerCfg(
+    MinimalPhysXRail1mpsYawTorqueSoftObsDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_minimal_physx_rail_1mps_yaw_torque_softobs_stiff_push_attached"
+
+
+@configclass
 class StraightDynamicWheelchairPushAttachedRobotEnvCfg(RelaxedDynamicWheelchairPushAttachedRobotEnvCfg):
     """Straight-line correction phase for the attached wheelchair push task."""
 
