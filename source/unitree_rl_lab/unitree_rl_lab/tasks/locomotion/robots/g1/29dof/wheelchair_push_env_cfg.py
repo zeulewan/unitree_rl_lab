@@ -1377,6 +1377,20 @@ class MinimalPhysXRail1mpsYawTorqueSoftObsDynamicWheelchairPushAttachedPPORunner
     MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedPPORunnerCfg
 ):
     experiment_name = "unitree_g1_29dof_wheelchair_minimal_physx_rail_1mps_yaw_torque_softobs_push_attached"
+    algorithm = RslRlPpoAlgorithmCfg(
+        value_loss_coef=0.5,
+        use_clipped_value_loss=True,
+        clip_param=0.05,
+        entropy_coef=0.001,
+        num_learning_epochs=2,
+        num_mini_batches=4,
+        learning_rate=3.0e-5,
+        schedule="fixed",
+        gamma=0.99,
+        lam=0.95,
+        desired_kl=None,
+        max_grad_norm=0.1,
+    )
 
 
 @configclass
