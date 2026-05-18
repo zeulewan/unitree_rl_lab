@@ -220,11 +220,10 @@ def attach_wheelchair_hands_to_handles(
             else:
                 raise ValueError(f"Unsupported hand attachment joint_type: {joint_type}")
 
-            joint.CreateBody0Rel().SetTargets([Sdf.Path(body0_path)])
-            joint.CreateBody1Rel().SetTargets([Sdf.Path(body1_path)])
-            joint.GetExcludeFromArticulationAttr().Set(True)
             robot_local_pos = attachment.get("robot_local_pos")
             wheelchair_local_pos = attachment.get("wheelchair_local_pos")
+            # Author the joint frame before binding bodies. Otherwise PhysX can see a transient
+            # origin-to-origin joint and report disjoint bodies before the grip offsets exist.
             if robot_local_pos is not None or wheelchair_local_pos is not None:
                 _set_joint_frame_at_local_offsets(
                     stage,
@@ -238,6 +237,10 @@ def attach_wheelchair_hands_to_handles(
                 _set_joint_frame_at_body_origins(joint)
             else:
                 _set_joint_frame_at_body1(stage, joint, body0_path, body1_path)
+
+            joint.GetExcludeFromArticulationAttr().Set(True)
+            joint.CreateBody0Rel().SetTargets([Sdf.Path(body0_path)])
+            joint.CreateBody1Rel().SetTargets([Sdf.Path(body1_path)])
 
             if mask_collisions:
                 _mask_collision_pair(stage, body0_path, body1_path)

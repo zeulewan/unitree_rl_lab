@@ -1292,6 +1292,46 @@ class MinimalPhysXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedPPORu
 
 
 @configclass
+class MinimalPhysXRailFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg(
+    MinimalPhysXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """Fast-lean PhysX rail task restored to both-hand hard USD joints."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.events.soft_attach_wheelchair_hands_reset = None
+        self.events.soft_attach_wheelchair_hands = None
+        self.events.attach_wheelchair_hands = EventTerm(
+            func=mdp.attach_wheelchair_hands_to_handles,
+            mode="reset",
+            params={
+                "attachments": DYNAMIC_WHEELCHAIR_HAND_HANDLE_ATTACHMENTS,
+                "joint_type": "spherical",
+                "mask_collisions": True,
+                "anchor_at_body_origins": False,
+                "skip_existing": True,
+            },
+        )
+
+
+@configclass
+class MinimalPhysXRailFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    MinimalPhysXRailFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalPhysXRailFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedPPORunnerCfg(
+    MinimalPhysXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_minimal_physx_rail_fast_lean_hard_attach_push_attached"
+
+
+@configclass
 class MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedRobotEnvCfg(
     MinimalPhysXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedRobotEnvCfg
 ):
