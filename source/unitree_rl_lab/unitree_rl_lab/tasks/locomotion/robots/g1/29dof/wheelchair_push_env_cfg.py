@@ -2,6 +2,7 @@ from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.utils import configclass
 from isaaclab_rl.rsl_rl import RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
@@ -1242,7 +1243,16 @@ class MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedRobotEnvCfg(
         self.rewards.wheelchair_forward_progress.weight = 2.0
         self.rewards.wheelchair_forward_progress.params["max_velocity"] = 1.4
         self.rewards.wheelchair_backward_velocity.weight = -3.0
+        self.rewards.robot_forward_lean.weight = 0.0
         self.rewards.wheelchair_rail_yaw_torque.weight = -0.05
+        self.terminations.non_finite_wheelchair = DoneTerm(
+            func=mdp.non_finite_asset_state,
+            params={"asset_cfg": SceneEntityCfg("wheelchair", body_names="base_link")},
+        )
+        self.terminations.non_finite_robot = DoneTerm(
+            func=mdp.non_finite_asset_state,
+            params={"asset_cfg": SceneEntityCfg("robot")},
+        )
 
 
 @configclass

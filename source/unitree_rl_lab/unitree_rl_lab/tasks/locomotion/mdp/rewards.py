@@ -16,6 +16,18 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
 
+def _finite_tensor(value: torch.Tensor, replacement: float = 0.0) -> torch.Tensor:
+    return torch.nan_to_num(value, nan=replacement, posinf=replacement, neginf=replacement)
+
+
+def _finite_quat(quat: torch.Tensor) -> torch.Tensor:
+    quat = _finite_tensor(quat)
+    norm = torch.linalg.norm(quat, dim=-1, keepdim=True)
+    identity = torch.zeros_like(quat)
+    identity[..., 0] = 1.0
+    return torch.where(norm > 1.0e-6, quat / norm.clamp_min(1.0e-6), identity)
+
+
 def _root_or_selected_body_state(
     asset: Articulation,
     asset_cfg: SceneEntityCfg,
@@ -24,18 +36,18 @@ def _root_or_selected_body_state(
 
     if isinstance(asset_cfg.body_ids, slice):
         return (
-            asset.data.root_pos_w,
-            asset.data.root_quat_w,
-            asset.data.root_lin_vel_w,
-            asset.data.root_ang_vel_w,
+            _finite_tensor(asset.data.root_pos_w),
+            _finite_quat(asset.data.root_quat_w),
+            _finite_tensor(asset.data.root_lin_vel_w),
+            _finite_tensor(asset.data.root_ang_vel_w),
         )
 
     body_id = asset_cfg.body_ids[0] if isinstance(asset_cfg.body_ids, list) else int(asset_cfg.body_ids)
     return (
-        asset.data.body_pos_w[:, body_id, :],
-        asset.data.body_quat_w[:, body_id, :],
-        asset.data.body_lin_vel_w[:, body_id, :],
-        asset.data.body_ang_vel_w[:, body_id, :],
+        _finite_tensor(asset.data.body_pos_w[:, body_id, :]),
+        _finite_quat(asset.data.body_quat_w[:, body_id, :]),
+        _finite_tensor(asset.data.body_lin_vel_w[:, body_id, :]),
+        _finite_tensor(asset.data.body_ang_vel_w[:, body_id, :]),
     )
 
 
@@ -81,13 +93,13 @@ def _body_points_w(
     body_ids: list[int],
     local_positions: list[list[float]] | None = None,
 ) -> torch.Tensor:
-    body_pos_w = asset.data.body_pos_w[:, body_ids, :]
+    body_pos_w = _finite_tensor(asset.data.body_pos_w[:, body_ids, :])
     if local_positions is None:
         return body_pos_w
 
     local_pos = torch.tensor(local_positions, device=body_pos_w.device, dtype=body_pos_w.dtype).unsqueeze(0)
     local_pos = local_pos.expand(body_pos_w.shape[0], -1, -1)
-    body_quat_w = asset.data.body_quat_w[:, body_ids, :]
+    body_quat_w = _finite_quat(asset.data.body_quat_w[:, body_ids, :])
     offsets_w = quat_apply(body_quat_w.reshape(-1, 4), local_pos.reshape(-1, 3)).reshape_as(body_pos_w)
     return body_pos_w + offsets_w
 
@@ -106,7 +118,7 @@ def _body_positions_in_root_frame(
 
 
 def _body_axis_in_world(asset: Articulation, body_ids: list[int], axis: list[float]) -> torch.Tensor:
-    body_quat_w = asset.data.body_quat_w[:, body_ids, :]
+    body_quat_w = _finite_quat(asset.data.body_quat_w[:, body_ids, :])
     axis_b = torch.tensor(axis, device=body_quat_w.device, dtype=body_quat_w.dtype)
     axis_b = axis_b.expand(body_quat_w.shape[0], body_quat_w.shape[1], 3)
     axis_w = quat_apply(body_quat_w.reshape(-1, 4), axis_b.reshape(-1, 3))
@@ -332,7 +344,7 @@ def body_incoming_joint_torque_axis_l2(
     asset: Articulation = env.scene[asset_cfg.name]
     axis_id = {"x": 0, "y": 1, "z": 2}[axis]
     body_id = asset_cfg.body_ids[0] if isinstance(asset_cfg.body_ids, list) else int(asset_cfg.body_ids)
-    torque = asset.data.body_incoming_joint_wrench_b[:, body_id, 3 + axis_id]
+    torque = _finite_tensor(asset.data.body_incoming_joint_wrench_b[:, body_id, 3 + axis_id])
     torque_abs = torch.clamp(torch.abs(torque), max=max_abs_torque)
     return torch.square(torque_abs / scale)
 
@@ -449,9 +461,10 @@ def root_forward_lean_exp(
 ) -> torch.Tensor:
     """Reward the root's local up axis leaning toward positive world X."""
     asset: RigidObject = env.scene[asset_cfg.name]
-    local_up = torch.tensor([0.0, 0.0, 1.0], dtype=asset.data.root_quat_w.dtype, device=asset.data.root_quat_w.device)
-    local_up = local_up.expand(asset.data.root_quat_w.shape[0], -1)
-    root_up_w = quat_apply(asset.data.root_quat_w, local_up)
+    root_quat_w = _finite_quat(asset.data.root_quat_w)
+    local_up = torch.tensor([0.0, 0.0, 1.0], dtype=root_quat_w.dtype, device=root_quat_w.device)
+    local_up = local_up.expand(root_quat_w.shape[0], -1)
+    root_up_w = quat_apply(root_quat_w, local_up)
     lean_error = torch.square(root_up_w[:, 0] - target)
     return torch.exp(-lean_error / (std * std))
 
