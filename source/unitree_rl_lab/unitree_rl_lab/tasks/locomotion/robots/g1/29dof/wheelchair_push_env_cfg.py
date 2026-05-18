@@ -705,12 +705,13 @@ class DynamicWheelchairPushAttachedRobotEnvCfg(DynamicWheelchairPushObservedRobo
 
         self.events.attach_wheelchair_hands = EventTerm(
             func=mdp.attach_wheelchair_hands_to_handles,
-            mode="startup",
+            mode="reset",
             params={
                 "attachments": DYNAMIC_WHEELCHAIR_HAND_HANDLE_ATTACHMENTS,
                 "joint_type": "spherical",
                 "mask_collisions": True,
                 "anchor_at_body_origins": False,
+                "skip_existing": True,
             },
         )
 
@@ -1187,6 +1188,29 @@ class MinimalPhysXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedRobot
     def __post_init__(self):
         super().__post_init__()
 
+        self.scene.robot.spawn.rigid_props.max_linear_velocity = 20.0
+        self.scene.robot.spawn.rigid_props.max_angular_velocity = 40.0
+        env_step_dt = self.decimation * self.sim.dt
+        soft_hand_attachment_params = {
+            "robot_cfg": SceneEntityCfg("robot", body_names=DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES),
+            "wheelchair_cfg": SceneEntityCfg("wheelchair", body_names=DYNAMIC_WHEELCHAIR_HANDLE_BODY_NAMES),
+            "robot_body_local_positions": HAND_GRIP_LOCAL_POSITIONS,
+            "stiffness": 2500.0,
+            "damping": 75.0,
+            "max_force": 350.0,
+        }
+        self.events.attach_wheelchair_hands = None
+        self.events.soft_attach_wheelchair_hands_reset = EventTerm(
+            func=mdp.apply_soft_hand_handle_attachment,
+            mode="reset",
+            params=soft_hand_attachment_params,
+        )
+        self.events.soft_attach_wheelchair_hands = EventTerm(
+            func=mdp.apply_soft_hand_handle_attachment,
+            mode="interval",
+            interval_range_s=(env_step_dt, env_step_dt),
+            params=soft_hand_attachment_params,
+        )
         self.events.constrain_wheelchair_to_forward_rail = None
         self.observations.policy.wheelchair_root_state.params["wheelchair_cfg"] = SceneEntityCfg(
             "wheelchair", body_names="base_link"

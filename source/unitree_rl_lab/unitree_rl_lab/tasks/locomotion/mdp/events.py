@@ -81,6 +81,100 @@ def _mask_collision_pair(stage, body0_path: str, body1_path: str) -> None:
         rel.AddTarget(target)
 
 
+def _env_ids_tensor(env, env_ids) -> torch.Tensor:
+    if env_ids is None:
+        return torch.arange(env.num_envs, device=env.device, dtype=torch.long)
+    if hasattr(env_ids, "to"):
+        return env_ids.to(device=env.device, dtype=torch.long)
+    return torch.as_tensor(env_ids, device=env.device, dtype=torch.long)
+
+
+def _body_ids_list(asset_cfg: SceneEntityCfg) -> list[int]:
+    if isinstance(asset_cfg.body_ids, slice):
+        raise ValueError("Soft hand attachment requires explicit body_ids, not a slice.")
+    if hasattr(asset_cfg.body_ids, "detach"):
+        return asset_cfg.body_ids.detach().cpu().tolist()
+    return list(asset_cfg.body_ids)
+
+
+def _body_points_w(asset, env_ids: torch.Tensor, body_ids: list[int], local_positions: Sequence[Sequence[float]]):
+    body_pos_w = torch.nan_to_num(asset.data.body_pos_w[env_ids][:, body_ids, :])
+    body_quat_w = torch.nan_to_num(asset.data.body_quat_w[env_ids][:, body_ids, :])
+    local_pos = torch.as_tensor(local_positions, device=asset.device, dtype=body_pos_w.dtype).unsqueeze(0)
+    local_pos = local_pos.expand(body_pos_w.shape[0], -1, -1)
+    offset_w = math_utils.quat_apply(body_quat_w.reshape(-1, 4), local_pos.reshape(-1, 3)).reshape_as(body_pos_w)
+    return body_pos_w + offset_w, body_quat_w
+
+
+def apply_soft_hand_handle_attachment(
+    env,
+    env_ids,
+    robot_cfg: SceneEntityCfg,
+    wheelchair_cfg: SceneEntityCfg,
+    robot_body_local_positions: Sequence[Sequence[float]],
+    wheelchair_body_local_positions: Sequence[Sequence[float]] | None = None,
+    stiffness: float = 2500.0,
+    damping: float = 75.0,
+    max_force: float = 350.0,
+) -> None:
+    """Apply a bounded spring-damper between robot hand grip points and wheelchair handles."""
+
+    robot = env.scene[robot_cfg.name]
+    wheelchair = env.scene[wheelchair_cfg.name]
+    env_ids = _env_ids_tensor(env, env_ids)
+    robot_body_ids = _body_ids_list(robot_cfg)
+    wheelchair_body_ids = _body_ids_list(wheelchair_cfg)
+
+    if wheelchair_body_local_positions is None:
+        wheelchair_body_local_positions = [(0.0, 0.0, 0.0) for _ in wheelchair_body_ids]
+
+    hand_pos_w, hand_quat_w = _body_points_w(robot, env_ids, robot_body_ids, robot_body_local_positions)
+    handle_pos_w, handle_quat_w = _body_points_w(
+        wheelchair, env_ids, wheelchair_body_ids, wheelchair_body_local_positions
+    )
+    hand_vel_w = torch.nan_to_num(robot.data.body_lin_vel_w[env_ids][:, robot_body_ids, :])
+    handle_vel_w = torch.nan_to_num(wheelchair.data.body_lin_vel_w[env_ids][:, wheelchair_body_ids, :])
+
+    force_w = stiffness * (handle_pos_w - hand_pos_w) + damping * (handle_vel_w - hand_vel_w)
+    force_norm = torch.linalg.norm(force_w, dim=-1, keepdim=True).clamp_min(1.0e-6)
+    force_w = force_w * torch.clamp(max_force / force_norm, max=1.0)
+    force_w = torch.nan_to_num(force_w)
+
+    robot_force_b = math_utils.quat_apply_inverse(hand_quat_w.reshape(-1, 4), force_w.reshape(-1, 3)).reshape_as(
+        force_w
+    )
+    wheelchair_force_b = math_utils.quat_apply_inverse(
+        handle_quat_w.reshape(-1, 4), (-force_w).reshape(-1, 3)
+    ).reshape_as(force_w)
+
+    robot_positions_b = torch.as_tensor(
+        robot_body_local_positions, device=robot.device, dtype=force_w.dtype
+    ).unsqueeze(0)
+    robot_positions_b = robot_positions_b.expand(force_w.shape[0], -1, -1)
+    wheelchair_positions_b = torch.as_tensor(
+        wheelchair_body_local_positions, device=wheelchair.device, dtype=force_w.dtype
+    ).unsqueeze(0)
+    wheelchair_positions_b = wheelchair_positions_b.expand(force_w.shape[0], -1, -1)
+    zero_torque = torch.zeros_like(force_w)
+
+    robot.permanent_wrench_composer.set_forces_and_torques(
+        forces=robot_force_b,
+        torques=zero_torque,
+        positions=robot_positions_b,
+        body_ids=robot_body_ids,
+        env_ids=env_ids,
+        is_global=False,
+    )
+    wheelchair.permanent_wrench_composer.set_forces_and_torques(
+        forces=wheelchair_force_b,
+        torques=zero_torque,
+        positions=wheelchair_positions_b,
+        body_ids=wheelchair_body_ids,
+        env_ids=env_ids,
+        is_global=False,
+    )
+
+
 def attach_wheelchair_hands_to_handles(
     env,
     env_ids,
@@ -91,6 +185,7 @@ def attach_wheelchair_hands_to_handles(
     joint_type: str = "spherical",
     mask_collisions: bool = True,
     anchor_at_body_origins: bool = False,
+    skip_existing: bool = False,
 ) -> None:
     """Create USD joints from G1 hand bodies to wheelchair handle bodies."""
 
@@ -106,6 +201,8 @@ def attach_wheelchair_hands_to_handles(
             body0_path = f"{env_path}/{robot_prim_name}/{attachment['robot_body']}"
             body1_path = f"{env_path}/{wheelchair_prim_name}/{attachment['wheelchair_body']}"
             joint_path = f"{joint_root_path}/{attachment['joint_name']}"
+            if skip_existing and stage.GetPrimAtPath(joint_path).IsValid():
+                continue
 
             body0_prim = stage.GetPrimAtPath(body0_path)
             body1_prim = stage.GetPrimAtPath(body1_path)
