@@ -220,12 +220,13 @@ def wheelchair_forward_progress(
 
 def wheelchair_backward_velocity_l2(
     env: ManagerBasedRLEnv,
+    max_velocity: float = 3.0,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
 ) -> torch.Tensor:
     """Penalize the wheelchair root/body for moving backward along world X."""
     wheelchair: Articulation = env.scene[asset_cfg.name]
     _, _, lin_vel_w, _ = _root_or_selected_body_state(wheelchair, asset_cfg)
-    backward_velocity = torch.clamp(-lin_vel_w[:, 0], min=0.0)
+    backward_velocity = torch.clamp(-lin_vel_w[:, 0], min=0.0, max=max_velocity)
     return torch.square(backward_velocity)
 
 

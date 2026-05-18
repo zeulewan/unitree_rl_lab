@@ -424,7 +424,7 @@ class DynamicWheelchairPushRewardsCfg(WheelchairPushRewardsCfg):
     wheelchair_backward_velocity = RewTerm(
         func=mdp.wheelchair_backward_velocity_l2,
         weight=0.0,
-        params={"asset_cfg": SceneEntityCfg("wheelchair")},
+        params={"max_velocity": 3.0, "asset_cfg": SceneEntityCfg("wheelchair")},
     )
 
     robot_forward_lean = RewTerm(
@@ -1241,7 +1241,7 @@ class MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedRobotEnvCfg(
         self.rewards.wheelchair_track_forward_velocity.params["std"] = 0.4
         self.rewards.wheelchair_forward_progress.weight = 2.0
         self.rewards.wheelchair_forward_progress.params["max_velocity"] = 1.4
-        self.rewards.wheelchair_backward_velocity.weight = -10.0
+        self.rewards.wheelchair_backward_velocity.weight = -3.0
         self.rewards.wheelchair_rail_yaw_torque.weight = -0.05
 
 
