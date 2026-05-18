@@ -320,6 +320,20 @@ def wheelchair_yaw_velocity_l2(
     return torch.square(ang_vel_w[:, 2])
 
 
+def body_incoming_joint_torque_axis_l2(
+    env: ManagerBasedRLEnv,
+    axis: str = "z",
+    scale: float = 100.0,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+) -> torch.Tensor:
+    """Penalize a selected body's incoming joint torque on one local axis."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    axis_id = {"x": 0, "y": 1, "z": 2}[axis]
+    body_id = asset_cfg.body_ids[0] if isinstance(asset_cfg.body_ids, list) else int(asset_cfg.body_ids)
+    torque = asset.data.body_incoming_joint_wrench_b[:, body_id, 3 + axis_id]
+    return torch.square(torque / scale)
+
+
 def wheelchair_tilt_l2(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),

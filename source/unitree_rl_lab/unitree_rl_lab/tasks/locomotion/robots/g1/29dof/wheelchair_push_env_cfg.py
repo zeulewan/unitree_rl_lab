@@ -451,6 +451,16 @@ class DynamicWheelchairPushRewardsCfg(WheelchairPushRewardsCfg):
         params={"asset_cfg": SceneEntityCfg("wheelchair")},
     )
 
+    wheelchair_rail_yaw_torque = RewTerm(
+        func=mdp.body_incoming_joint_torque_axis_l2,
+        weight=0.0,
+        params={
+            "axis": "z",
+            "scale": 100.0,
+            "asset_cfg": SceneEntityCfg("wheelchair", body_names="base_link"),
+        },
+    )
+
     wheelchair_root_heading = RewTerm(
         func=mdp.root_heading_lateral_l2,
         weight=0.0,
@@ -1212,6 +1222,44 @@ class MinimalPhysXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedPPORu
     MinimalXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedPPORunnerCfg
 ):
     experiment_name = "unitree_g1_29dof_wheelchair_minimal_physx_rail_fast_lean_velocity_progress_push_attached"
+
+
+@configclass
+class MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedRobotEnvCfg(
+    MinimalPhysXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """1 m/s PhysX-rail push task with a yaw-torque penalty on the wheelchair rail joint."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.commands.base_velocity.ranges.lin_vel_x = (1.0, 1.0)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (1.0, 1.0)
+
+        self.rewards.wheelchair_track_forward_velocity.weight = 10.0
+        self.rewards.wheelchair_track_forward_velocity.params["std"] = 0.4
+        self.rewards.wheelchair_forward_progress.weight = 2.0
+        self.rewards.wheelchair_forward_progress.params["max_velocity"] = 1.4
+        self.rewards.wheelchair_backward_velocity.weight = -10.0
+        self.rewards.wheelchair_rail_yaw_torque.weight = -0.35
+
+
+@configclass
+class MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedPPORunnerCfg(
+    MinimalPhysXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_minimal_physx_rail_1mps_yaw_torque_push_attached"
+    max_iterations = 1000
+    save_interval = 50
 
 
 @configclass
