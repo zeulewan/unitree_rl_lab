@@ -1071,6 +1071,50 @@ class MinimalXRailVelocityProgressDynamicWheelchairPushAttachedPPORunnerCfg(
 
 
 @configclass
+class MinimalXRailFastVelocityProgressDynamicWheelchairPushAttachedRobotEnvCfg(
+    MinimalXRailVelocityProgressDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """X-rail no-collision push scaffold targeting 2 m/s chair speed without pose shaping."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.commands.base_velocity.ranges.lin_vel_x = (2.0, 2.0)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (2.0, 2.0)
+
+        self.actions.JointPositionAction.scale = {
+            ".*_hip_.*|.*_knee_joint|.*_ankle_.*": 0.50,
+            "waist_.*": 0.50,
+            ".*_shoulder_.*|.*_elbow_joint": 0.25,
+            ".*_wrist_.*": 0.08,
+        }
+
+        self.rewards.wheelchair_track_forward_velocity.weight = 10.0
+        self.rewards.wheelchair_track_forward_velocity.params["std"] = 0.8
+        self.rewards.wheelchair_forward_progress.weight = 3.0
+        self.rewards.wheelchair_forward_progress.params["max_velocity"] = 2.5
+        self.rewards.wheelchair_backward_velocity.weight = -10.0
+
+
+@configclass
+class MinimalXRailFastVelocityProgressDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    MinimalXRailFastVelocityProgressDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalXRailFastVelocityProgressDynamicWheelchairPushAttachedPPORunnerCfg(
+    MinimalVelocityDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_minimal_x_rail_fast_velocity_progress_push_attached"
+    max_iterations = 1000
+    save_interval = 50
+
+
+@configclass
 class StraightDynamicWheelchairPushAttachedRobotEnvCfg(RelaxedDynamicWheelchairPushAttachedRobotEnvCfg):
     """Straight-line correction phase for the attached wheelchair push task."""
 
