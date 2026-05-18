@@ -109,20 +109,88 @@ def wheelchair_handle_state_b(
     return torch.cat((handle_pos_b.flatten(start_dim=1), handle_error_b.flatten(start_dim=1)), dim=-1)
 
 
+def wheelchair_soft_attachment_state_b(
+    env: ManagerBasedRLEnv,
+    robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    wheelchair_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
+    robot_body_local_positions: list[list[float]] | None = None,
+    wheelchair_body_local_positions: list[list[float]] | None = None,
+    stiffness: float = 2500.0,
+    damping: float = 75.0,
+    max_force: float = 350.0,
+    force_scale: float = 350.0,
+) -> torch.Tensor:
+    """Soft hand-handle load state for compliant wheelchair attachment tasks."""
+
+    robot: Articulation = env.scene[robot_cfg.name]
+    wheelchair: Articulation = env.scene[wheelchair_cfg.name]
+
+    if wheelchair_body_local_positions is None:
+        wheelchair_body_local_positions = [[0.0, 0.0, 0.0] for _ in wheelchair_cfg.body_ids]
+
+    hand_pos_w, hand_quat_w, hand_vel_w = _body_point_state_w(
+        robot, robot_cfg.body_ids, robot_body_local_positions
+    )
+    handle_pos_w, handle_quat_w, handle_vel_w = _body_point_state_w(
+        wheelchair, wheelchair_cfg.body_ids, wheelchair_body_local_positions
+    )
+
+    rel_vel_b = _vectors_in_robot_root_frame(robot, handle_vel_w - hand_vel_w)
+
+    force_w = stiffness * (handle_pos_w - hand_pos_w) + damping * (handle_vel_w - hand_vel_w)
+    force_norm = torch.linalg.norm(force_w, dim=-1, keepdim=True).clamp_min(1.0e-6)
+    force_w = force_w * torch.clamp(max_force / force_norm, max=1.0)
+    force_b = torch.clamp(_vectors_in_robot_root_frame(robot, force_w) / force_scale, min=-1.0, max=1.0)
+    force_norm_scaled = torch.clamp(torch.linalg.norm(force_w, dim=-1) / force_scale, max=1.0)
+
+    basis = torch.eye(3, device=env.device, dtype=hand_quat_w.dtype)
+    basis = basis.reshape(1, 1, 3, 3).expand(hand_quat_w.shape[0], hand_quat_w.shape[1], 3, 3)
+    handle_axes_w = quat_apply(
+        handle_quat_w[:, :, None, :].expand(-1, -1, 3, -1).reshape(-1, 4),
+        basis.reshape(-1, 3),
+    ).reshape_as(basis)
+    handle_axes_in_hand = quat_apply_inverse(
+        hand_quat_w[:, :, None, :].expand(-1, -1, 3, -1).reshape(-1, 4),
+        handle_axes_w.reshape(-1, 3),
+    ).reshape_as(handle_axes_w)
+
+    state = torch.cat(
+        (
+            rel_vel_b.flatten(start_dim=1),
+            handle_axes_in_hand.flatten(start_dim=1),
+            force_b.flatten(start_dim=1),
+            force_norm_scaled,
+        ),
+        dim=-1,
+    )
+    return _finite_tensor(state)
+
+
 def _body_points_w(
     asset: Articulation,
     body_ids: list[int],
     local_positions: list[list[float]] | None = None,
 ) -> torch.Tensor:
+    return _body_point_state_w(asset, body_ids, local_positions)[0]
+
+
+def _body_point_state_w(
+    asset: Articulation,
+    body_ids: list[int],
+    local_positions: list[list[float]] | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     body_pos_w = _finite_tensor(asset.data.body_pos_w[:, body_ids, :])
+    body_quat_w = _finite_quat(asset.data.body_quat_w[:, body_ids, :])
+    body_lin_vel_w = _finite_tensor(asset.data.body_lin_vel_w[:, body_ids, :])
     if local_positions is None:
-        return body_pos_w
+        return body_pos_w, body_quat_w, body_lin_vel_w
 
     local_pos = torch.tensor(local_positions, device=body_pos_w.device, dtype=body_pos_w.dtype).unsqueeze(0)
     local_pos = local_pos.expand(body_pos_w.shape[0], -1, -1)
-    body_quat_w = _finite_quat(asset.data.body_quat_w[:, body_ids, :])
     offsets_w = quat_apply(body_quat_w.reshape(-1, 4), local_pos.reshape(-1, 3)).reshape_as(body_pos_w)
-    return body_pos_w + offsets_w
+    body_ang_vel_w = _finite_tensor(asset.data.body_ang_vel_w[:, body_ids, :])
+    point_vel_w = body_lin_vel_w + torch.cross(body_ang_vel_w, offsets_w, dim=-1)
+    return body_pos_w + offsets_w, body_quat_w, point_vel_w
 
 
 def _vectors_in_robot_root_frame(robot: Articulation, vectors_w: torch.Tensor) -> torch.Tensor:

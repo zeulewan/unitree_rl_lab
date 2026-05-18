@@ -595,6 +595,47 @@ class DynamicWheelchairPushObservedObservationsCfg(ObservationsCfg):
 
 
 @configclass
+class DynamicWheelchairPushSoftAttachmentObservationsCfg(DynamicWheelchairPushObservedObservationsCfg):
+    """Wheelchair observations plus soft hand-handle attachment load state."""
+
+    @configclass
+    class PolicyCfg(DynamicWheelchairPushObservedObservationsCfg.PolicyCfg):
+        wheelchair_soft_attachment_state = ObsTerm(
+            func=mdp.wheelchair_soft_attachment_state_b,
+            clip=(-3.0, 3.0),
+            params={
+                "robot_body_local_positions": HAND_GRIP_LOCAL_POSITIONS,
+                "robot_cfg": SceneEntityCfg("robot", body_names=DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES),
+                "wheelchair_cfg": SceneEntityCfg("wheelchair", body_names=DYNAMIC_WHEELCHAIR_HANDLE_BODY_NAMES),
+                "stiffness": 2500.0,
+                "damping": 75.0,
+                "max_force": 350.0,
+                "force_scale": 350.0,
+            },
+        )
+
+    policy: PolicyCfg = PolicyCfg()
+
+    @configclass
+    class CriticCfg(DynamicWheelchairPushObservedObservationsCfg.CriticCfg):
+        wheelchair_soft_attachment_state = ObsTerm(
+            func=mdp.wheelchair_soft_attachment_state_b,
+            clip=(-3.0, 3.0),
+            params={
+                "robot_body_local_positions": HAND_GRIP_LOCAL_POSITIONS,
+                "robot_cfg": SceneEntityCfg("robot", body_names=DYNAMIC_WHEELCHAIR_HAND_BODY_NAMES),
+                "wheelchair_cfg": SceneEntityCfg("wheelchair", body_names=DYNAMIC_WHEELCHAIR_HANDLE_BODY_NAMES),
+                "stiffness": 2500.0,
+                "damping": 75.0,
+                "max_force": 350.0,
+                "force_scale": 350.0,
+            },
+        )
+
+    critic: CriticCfg = CriticCfg()
+
+
+@configclass
 class DynamicWheelchairPushRobotEnvCfg(WheelchairPushRobotEnvCfg):
     """Trainable wheelchair-push task with a dynamic passive wheelchair in the scene.
 
@@ -1309,6 +1350,33 @@ class MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedPPORunnerCfg(
         desired_kl=None,
         max_grad_norm=0.02,
     )
+
+
+@configclass
+class MinimalPhysXRail1mpsYawTorqueSoftObsDynamicWheelchairPushAttachedRobotEnvCfg(
+    MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """Current 1 m/s PhysX-rail task with soft attachment state exposed to the policy."""
+
+    observations: DynamicWheelchairPushSoftAttachmentObservationsCfg = (
+        DynamicWheelchairPushSoftAttachmentObservationsCfg()
+    )
+
+
+@configclass
+class MinimalPhysXRail1mpsYawTorqueSoftObsDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    MinimalPhysXRail1mpsYawTorqueSoftObsDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalPhysXRail1mpsYawTorqueSoftObsDynamicWheelchairPushAttachedPPORunnerCfg(
+    MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_minimal_physx_rail_1mps_yaw_torque_softobs_push_attached"
 
 
 @configclass

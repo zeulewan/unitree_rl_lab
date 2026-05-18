@@ -118,6 +118,21 @@ parser.add_argument(
     help="Number of playback steps to sample when --print-wheelchair-rail-wrench-stats is set without video.",
 )
 parser.add_argument(
+    "--print-soft-attachment-stats",
+    action="store_true",
+    default=False,
+    help="Print hand-handle spring-damper diagnostic stats during playback.",
+)
+parser.add_argument(
+    "--soft-attachment-stats-steps",
+    type=int,
+    default=300,
+    help="Number of playback steps to sample when --print-soft-attachment-stats is set without video.",
+)
+parser.add_argument("--soft-attachment-stiffness", type=float, default=2500.0)
+parser.add_argument("--soft-attachment-damping", type=float, default=75.0)
+parser.add_argument("--soft-attachment-max-force", type=float, default=350.0)
+parser.add_argument(
     "--exit-after-offset-print",
     action="store_true",
     default=False,
@@ -458,6 +473,103 @@ def _print_wheelchair_rail_wrench_stats(samples):
     )
 
 
+def _body_point_state_w(asset, body_ids, local_positions):
+    body_pos_w = torch.nan_to_num(asset.data.body_pos_w[:, body_ids, :])
+    body_quat_w = torch.nan_to_num(asset.data.body_quat_w[:, body_ids, :])
+    body_lin_vel_w = torch.nan_to_num(asset.data.body_lin_vel_w[:, body_ids, :])
+    local_pos = torch.tensor(local_positions, device=body_pos_w.device, dtype=body_pos_w.dtype).unsqueeze(0)
+    local_pos = local_pos.expand(body_pos_w.shape[0], -1, -1)
+    offsets_w = quat_apply(body_quat_w.reshape(-1, 4), local_pos.reshape(-1, 3)).reshape_as(body_pos_w)
+    body_ang_vel_w = torch.nan_to_num(asset.data.body_ang_vel_w[:, body_ids, :])
+    point_vel_w = body_lin_vel_w + torch.cross(body_ang_vel_w, offsets_w, dim=-1)
+    return body_pos_w + offsets_w, body_quat_w, point_vel_w
+
+
+def _sample_soft_attachment_stats(env, samples):
+    """Collect hand-handle spring-damper state for compliant attachment diagnostics."""
+    try:
+        robot = env.unwrapped.scene["robot"]
+        wheelchair = env.unwrapped.scene["wheelchair"]
+        if "_body_ids" not in samples:
+            hand_ids = [robot.data.body_names.index("left_rubber_hand"), robot.data.body_names.index("right_rubber_hand")]
+            handle_ids = [
+                wheelchair.data.body_names.index("left_handle_frame"),
+                wheelchair.data.body_names.index("right_handle_frame"),
+            ]
+            samples["_body_ids"] = (hand_ids, handle_ids)
+            samples["_names"] = ("left", "right")
+        hand_ids, handle_ids = samples["_body_ids"]
+        hand_local_positions = [[0.05414, -0.00372, 0.00502], [0.05414, 0.00372, 0.00502]]
+        handle_local_positions = [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+        hand_pos_w, hand_quat_w, hand_vel_w = _body_point_state_w(robot, hand_ids, hand_local_positions)
+        handle_pos_w, handle_quat_w, handle_vel_w = _body_point_state_w(
+            wheelchair, handle_ids, handle_local_positions
+        )
+        pos_error_w = handle_pos_w - hand_pos_w
+        rel_vel_w = handle_vel_w - hand_vel_w
+        force_w = args_cli.soft_attachment_stiffness * pos_error_w + args_cli.soft_attachment_damping * rel_vel_w
+        force_norm = torch.linalg.norm(force_w, dim=-1, keepdim=True).clamp_min(1.0e-6)
+        force_w = force_w * torch.clamp(args_cli.soft_attachment_max_force / force_norm, max=1.0)
+
+        axis_b = torch.tensor([1.0, 0.0, 0.0], device=env.unwrapped.device, dtype=hand_quat_w.dtype)
+        axis_b = axis_b.expand(hand_quat_w.shape[0], hand_quat_w.shape[1], 3)
+        hand_axis_w = quat_apply(hand_quat_w.reshape(-1, 4), axis_b.reshape(-1, 3)).reshape_as(axis_b)
+        handle_axis_w = quat_apply(handle_quat_w.reshape(-1, 4), axis_b.reshape(-1, 3)).reshape_as(axis_b)
+        axis_alignment_error = 1.0 - torch.abs(torch.sum(hand_axis_w * handle_axis_w, dim=-1)).clamp(max=1.0)
+
+        samples["pos_error_norm"].append(torch.linalg.norm(pos_error_w, dim=-1).detach().cpu())
+        samples["rel_vel_norm"].append(torch.linalg.norm(rel_vel_w, dim=-1).detach().cpu())
+        samples["force"].append(force_w.detach().cpu())
+        samples["force_norm"].append(torch.linalg.norm(force_w, dim=-1).detach().cpu())
+        samples["axis_alignment_error"].append(axis_alignment_error.detach().cpu())
+    except Exception as err:
+        if not samples.get("warned"):
+            print(f"[WARN] Failed to sample soft-attachment stats: {err}", flush=True)
+            samples["warned"] = True
+
+
+def _print_soft_attachment_stats(samples):
+    """Print sampled hand-handle spring-damper diagnostics."""
+    if not samples["force_norm"]:
+        print("[WARN] No soft-attachment samples collected.", flush=True)
+        return
+
+    pos_error_norm = torch.cat(samples["pos_error_norm"])
+    rel_vel_norm = torch.cat(samples["rel_vel_norm"])
+    force = torch.cat(samples["force"])
+    force_norm = torch.cat(samples["force_norm"])
+    axis_alignment_error = torch.cat(samples["axis_alignment_error"])
+    left_force = force[:, 0, :]
+    right_force = force[:, 1, :]
+    force_imbalance = torch.linalg.norm(left_force - right_force, dim=-1)
+    print("[INFO] Soft hand-handle attachment stats:", flush=True)
+    print(
+        "[INFO] "
+        f"samples={force_norm.numel()} "
+        f"pos_error_mean={pos_error_norm.mean().item():.4f}m "
+        f"pos_error_p95={torch.quantile(pos_error_norm.flatten(), 0.95).item():.4f}m "
+        f"pos_error_max={pos_error_norm.max().item():.4f}m "
+        f"rel_vel_mean={rel_vel_norm.mean().item():.4f}m/s",
+        flush=True,
+    )
+    print(
+        "[INFO] "
+        f"force_norm_mean={force_norm.mean().item():.2f}N "
+        f"force_norm_p95={torch.quantile(force_norm.flatten(), 0.95).item():.2f}N "
+        f"force_norm_max={force_norm.max().item():.2f}N "
+        f"force_imbalance_mean={force_imbalance.mean().item():.2f}N",
+        flush=True,
+    )
+    print(
+        "[INFO] "
+        f"force_x_mean={force[:, :, 0].mean().item():.2f}N "
+        f"force_y_abs_mean={torch.abs(force[:, :, 1]).mean().item():.2f}N "
+        f"force_z_abs_mean={torch.abs(force[:, :, 2]).mean().item():.2f}N "
+        f"axis_alignment_error_mean={axis_alignment_error.mean().item():.4f}",
+        flush=True,
+    )
+
+
 def _repo_root() -> Path:
     for parent in Path(__file__).resolve().parents:
         if (parent / "assets" / "objects" / "wheelchair").exists():
@@ -630,11 +742,20 @@ def main():
         "force": [],
         "torque": [],
     }
+    soft_attachment_samples = {
+        "pos_error_norm": [],
+        "rel_vel_norm": [],
+        "force": [],
+        "force_norm": [],
+        "axis_alignment_error": [],
+    }
     stats_steps = 0
     if args_cli.print_wheelchair_speed_stats:
         stats_steps = max(stats_steps, args_cli.speed_stats_steps)
     if args_cli.print_wheelchair_rail_wrench_stats:
         stats_steps = max(stats_steps, args_cli.rail_wrench_stats_steps)
+    if args_cli.print_soft_attachment_stats:
+        stats_steps = max(stats_steps, args_cli.soft_attachment_stats_steps)
     timestep = 0
     # simulate environment
     while simulation_app.is_running():
@@ -653,6 +774,8 @@ def main():
                 _sample_wheelchair_speed_stats(base_env, speed_samples)
             if args_cli.print_wheelchair_rail_wrench_stats:
                 _sample_wheelchair_rail_wrench_stats(base_env, rail_wrench_samples)
+            if args_cli.print_soft_attachment_stats:
+                _sample_soft_attachment_stats(base_env, soft_attachment_samples)
         timestep += 1
         if args_cli.video:
             # Exit the play loop after recording one video
@@ -670,6 +793,8 @@ def main():
         _print_wheelchair_speed_stats(speed_samples)
     if args_cli.print_wheelchair_rail_wrench_stats:
         _print_wheelchair_rail_wrench_stats(rail_wrench_samples)
+    if args_cli.print_soft_attachment_stats:
+        _print_soft_attachment_stats(soft_attachment_samples)
 
     # close the simulator
     env.close()
