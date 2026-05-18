@@ -387,6 +387,21 @@ def upward(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("r
     return reward
 
 
+def root_forward_lean_exp(
+    env: ManagerBasedRLEnv,
+    target: float = 0.17,
+    std: float = 0.20,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Reward the root's local up axis leaning toward positive world X."""
+    asset: RigidObject = env.scene[asset_cfg.name]
+    local_up = torch.tensor([0.0, 0.0, 1.0], dtype=asset.data.root_quat_w.dtype, device=asset.data.root_quat_w.device)
+    local_up = local_up.expand(asset.data.root_quat_w.shape[0], -1)
+    root_up_w = quat_apply(asset.data.root_quat_w, local_up)
+    lean_error = torch.square(root_up_w[:, 0] - target)
+    return torch.exp(-lean_error / (std * std))
+
+
 def joint_position_penalty(
     env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, stand_still_scale: float, velocity_threshold: float
 ) -> torch.Tensor:

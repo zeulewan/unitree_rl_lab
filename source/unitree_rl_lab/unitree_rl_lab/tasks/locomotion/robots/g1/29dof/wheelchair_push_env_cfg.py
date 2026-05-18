@@ -418,6 +418,12 @@ class DynamicWheelchairPushRewardsCfg(WheelchairPushRewardsCfg):
         params={"asset_cfg": SceneEntityCfg("wheelchair")},
     )
 
+    robot_forward_lean = RewTerm(
+        func=mdp.root_forward_lean_exp,
+        weight=0.0,
+        params={"target": 0.17, "std": 0.20, "asset_cfg": SceneEntityCfg("robot")},
+    )
+
     wheelchair_lateral_velocity = RewTerm(
         func=mdp.wheelchair_lateral_velocity_l2,
         weight=-1.0,
@@ -1110,6 +1116,38 @@ class MinimalXRailFastVelocityProgressDynamicWheelchairPushAttachedPPORunnerCfg(
     MinimalVelocityDynamicWheelchairPushAttachedPPORunnerCfg
 ):
     experiment_name = "unitree_g1_29dof_wheelchair_minimal_x_rail_fast_velocity_progress_push_attached"
+    max_iterations = 1000
+    save_interval = 50
+
+
+@configclass
+class MinimalXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedRobotEnvCfg(
+    MinimalXRailFastVelocityProgressDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """2 m/s X-rail scaffold with a small forward root-lean bias."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.rewards.robot_forward_lean.weight = 1.0
+        self.rewards.robot_forward_lean.params["target"] = 0.17
+        self.rewards.robot_forward_lean.params["std"] = 0.20
+
+
+@configclass
+class MinimalXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    MinimalXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedPPORunnerCfg(
+    MinimalVelocityDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_minimal_x_rail_fast_lean_velocity_progress_push_attached"
     max_iterations = 1000
     save_interval = 50
 
