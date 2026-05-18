@@ -47,6 +47,18 @@ parser.add_argument(
     help="When resuming, load policy weights from the checkpoint but reset the optimizer state.",
 )
 parser.add_argument(
+    "--reset_critic",
+    action="store_true",
+    default=False,
+    help="When resuming, reinitialize the critic network after loading actor-critic weights.",
+)
+parser.add_argument(
+    "--policy_std",
+    type=float,
+    default=None,
+    help="When resuming, overwrite the loaded scalar policy exploration std.",
+)
+parser.add_argument(
     "--distributed", action="store_true", default=False, help="Run training with multiple GPUs or nodes."
 )
 # append RSL-RL cli arguments
@@ -199,6 +211,19 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         print(f"[INFO]: Loading model checkpoint from: {resume_path}")
         # load previously trained model
         runner.load(resume_path, load_optimizer=not args_cli.load_model_only)
+        if args_cli.reset_critic and hasattr(runner.alg.policy, "critic"):
+            runner.alg.policy.critic.apply(
+                lambda module: module.reset_parameters() if hasattr(module, "reset_parameters") else None
+            )
+            print("[INFO]: Reset critic network after loading checkpoint.")
+        if args_cli.policy_std is not None:
+            policy = runner.alg.policy
+            if hasattr(policy, "std"):
+                policy.std.data.fill_(args_cli.policy_std)
+                print(f"[INFO]: Set scalar policy std to {args_cli.policy_std}.")
+            elif hasattr(policy, "log_std"):
+                policy.log_std.data.fill_(torch.log(torch.tensor(args_cli.policy_std, device=policy.log_std.device)))
+                print(f"[INFO]: Set log policy std from scalar value {args_cli.policy_std}.")
 
     # dump the configuration into log-directory
     dump_yaml(os.path.join(log_dir, "params", "env.yaml"), env_cfg)
