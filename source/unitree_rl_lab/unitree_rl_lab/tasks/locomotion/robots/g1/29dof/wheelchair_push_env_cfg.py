@@ -1261,7 +1261,30 @@ class MinimalPhysXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedRobot
         self.observations.critic.wheelchair_root_state.params["wheelchair_cfg"] = SceneEntityCfg(
             "wheelchair", body_names="base_link"
         )
+        self.observations.policy.base_ang_vel.clip = (-10.0, 10.0)
+        self.observations.policy.joint_vel_rel.clip = (-10.0, 10.0)
+        self.observations.critic.base_lin_vel.clip = (-10.0, 10.0)
+        self.observations.critic.base_ang_vel.clip = (-10.0, 10.0)
+        self.observations.critic.joint_vel_rel.clip = (-10.0, 10.0)
         base_link_cfg = SceneEntityCfg("wheelchair", body_names="base_link")
+        self.terminations.unstable_robot_state = DoneTerm(
+            func=mdp.asset_state_out_of_bounds,
+            params={
+                "asset_cfg": SceneEntityCfg("robot"),
+                "max_linear_velocity": 20.0,
+                "max_angular_velocity": 40.0,
+                "max_position_norm": 200.0,
+            },
+        )
+        self.terminations.unstable_wheelchair_state = DoneTerm(
+            func=mdp.asset_state_out_of_bounds,
+            params={
+                "asset_cfg": base_link_cfg,
+                "max_linear_velocity": 10.0,
+                "max_angular_velocity": 25.0,
+                "max_position_norm": 200.0,
+            },
+        )
         for reward_name in (
             "wheelchair_track_forward_velocity",
             "wheelchair_forward_progress",
