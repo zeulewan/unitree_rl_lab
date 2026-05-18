@@ -457,6 +457,7 @@ class DynamicWheelchairPushRewardsCfg(WheelchairPushRewardsCfg):
         params={
             "axis": "z",
             "scale": 100.0,
+            "max_abs_torque": 250.0,
             "asset_cfg": SceneEntityCfg("wheelchair", body_names="base_link"),
         },
     )
@@ -1241,7 +1242,7 @@ class MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedRobotEnvCfg(
         self.rewards.wheelchair_forward_progress.weight = 2.0
         self.rewards.wheelchair_forward_progress.params["max_velocity"] = 1.4
         self.rewards.wheelchair_backward_velocity.weight = -10.0
-        self.rewards.wheelchair_rail_yaw_torque.weight = -0.35
+        self.rewards.wheelchair_rail_yaw_torque.weight = -0.05
 
 
 @configclass
