@@ -35,22 +35,33 @@ def wheelchair_root_state_b(
     """Wheelchair root pose/velocity cues in the robot root frame."""
     robot: Articulation = env.scene[robot_cfg.name]
     wheelchair: Articulation = env.scene[wheelchair_cfg.name]
+    if wheelchair_cfg.body_ids != slice(None):
+        body_id = wheelchair_cfg.body_ids[0]
+        wheelchair_pos_w = wheelchair.data.body_pos_w[:, body_id, :]
+        wheelchair_quat_w = wheelchair.data.body_quat_w[:, body_id, :]
+        wheelchair_lin_vel_w = wheelchair.data.body_lin_vel_w[:, body_id, :]
+        wheelchair_ang_vel_w = wheelchair.data.body_ang_vel_w[:, body_id, :]
+    else:
+        wheelchair_pos_w = wheelchair.data.root_pos_w
+        wheelchair_quat_w = wheelchair.data.root_quat_w
+        wheelchair_lin_vel_w = wheelchair.data.root_lin_vel_w
+        wheelchair_ang_vel_w = wheelchair.data.root_ang_vel_w
 
-    rel_pos_w = wheelchair.data.root_pos_w - robot.data.root_pos_w
+    rel_pos_w = wheelchair_pos_w - robot.data.root_pos_w
     rel_pos_b = quat_apply_inverse(robot.data.root_quat_w, rel_pos_w)
 
-    rel_lin_vel_w = wheelchair.data.root_lin_vel_w - robot.data.root_lin_vel_w
+    rel_lin_vel_w = wheelchair_lin_vel_w - robot.data.root_lin_vel_w
     rel_lin_vel_b = quat_apply_inverse(robot.data.root_quat_w, rel_lin_vel_w)
 
     x_axis_b = torch.zeros_like(rel_pos_w)
     x_axis_b[:, 0] = 1.0
-    wheelchair_forward_w = quat_apply(wheelchair.data.root_quat_w, x_axis_b)
+    wheelchair_forward_w = quat_apply(wheelchair_quat_w, x_axis_b)
     wheelchair_forward_b = quat_apply_inverse(robot.data.root_quat_w, wheelchair_forward_w)
 
-    rel_ang_vel_w = wheelchair.data.root_ang_vel_w - robot.data.root_ang_vel_w
+    rel_ang_vel_w = wheelchair_ang_vel_w - robot.data.root_ang_vel_w
     rel_ang_vel_b = quat_apply_inverse(robot.data.root_quat_w, rel_ang_vel_w)
 
-    centerline_error = (wheelchair.data.root_pos_w[:, 1] - env.scene.env_origins[:, 1]).unsqueeze(-1)
+    centerline_error = (wheelchair_pos_w[:, 1] - env.scene.env_origins[:, 1]).unsqueeze(-1)
     return torch.cat(
         (
             rel_pos_b,

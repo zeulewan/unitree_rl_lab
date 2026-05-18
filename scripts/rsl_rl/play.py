@@ -98,6 +98,18 @@ parser.add_argument(
     help="Number of playback steps to sample when --print-wheelchair-speed-stats is set without video.",
 )
 parser.add_argument(
+    "--print-wheelchair-rail-wrench-stats",
+    action="store_true",
+    default=False,
+    help="Print the wheelchair base incoming-joint wrench for PhysX rail diagnostics.",
+)
+parser.add_argument(
+    "--rail-wrench-stats-steps",
+    type=int,
+    default=300,
+    help="Number of playback steps to sample when --print-wheelchair-rail-wrench-stats is set without video.",
+)
+parser.add_argument(
     "--exit-after-offset-print",
     action="store_true",
     default=False,
@@ -290,14 +302,29 @@ def _sample_wheelchair_speed_stats(env, samples):
     try:
         wheelchair = env.unwrapped.scene["wheelchair"]
         command = env.unwrapped.command_manager.get_command("base_velocity")
-        samples["forward"].append(wheelchair.data.root_lin_vel_w[:, 0].detach().cpu())
-        samples["lateral"].append(wheelchair.data.root_lin_vel_w[:, 1].detach().cpu())
-        samples["yaw"].append(wheelchair.data.root_ang_vel_w[:, 2].detach().cpu())
-        centerline_y = wheelchair.data.root_pos_w[:, 1] - env.unwrapped.scene.env_origins[:, 1]
+        if "_body_id" not in samples:
+            body_ids, body_names = wheelchair.find_bodies("base_link")
+            samples["_body_id"] = body_ids[0] if body_ids else None
+            samples["_body_name"] = body_names[0] if body_names else "root"
+        body_id = samples["_body_id"]
+        if body_id is None:
+            lin_vel_w = wheelchair.data.root_lin_vel_w
+            ang_vel_w = wheelchair.data.root_ang_vel_w
+            pos_w = wheelchair.data.root_pos_w
+            quat_w = wheelchair.data.root_quat_w
+        else:
+            lin_vel_w = wheelchair.data.body_lin_vel_w[:, body_id, :]
+            ang_vel_w = wheelchair.data.body_ang_vel_w[:, body_id, :]
+            pos_w = wheelchair.data.body_pos_w[:, body_id, :]
+            quat_w = wheelchair.data.body_quat_w[:, body_id, :]
+        samples["forward"].append(lin_vel_w[:, 0].detach().cpu())
+        samples["lateral"].append(lin_vel_w[:, 1].detach().cpu())
+        samples["yaw"].append(ang_vel_w[:, 2].detach().cpu())
+        centerline_y = pos_w[:, 1] - env.unwrapped.scene.env_origins[:, 1]
         samples["centerline_y"].append(centerline_y.detach().cpu())
-        x_axis = torch.tensor([1.0, 0.0, 0.0], device=env.unwrapped.device, dtype=wheelchair.data.root_quat_w.dtype)
+        x_axis = torch.tensor([1.0, 0.0, 0.0], device=env.unwrapped.device, dtype=quat_w.dtype)
         x_axis = x_axis.expand(env.unwrapped.num_envs, 3)
-        heading_w = quat_apply(wheelchair.data.root_quat_w, x_axis)
+        heading_w = quat_apply(quat_w, x_axis)
         samples["heading_y"].append(heading_w[:, 1].detach().cpu())
         samples["command_x"].append(command[:, 0].detach().cpu())
     except Exception as err:
@@ -324,6 +351,7 @@ def _print_wheelchair_speed_stats(samples):
     print("[INFO] Wheelchair raw speed stats:", flush=True)
     print(
         "[INFO] "
+        f"body={samples.get('_body_name', 'root')} "
         f"samples={forward.numel()} "
         f"command_x_mean={command_x.mean().item():.4f}m/s "
         f"forward_mean={forward.mean().item():.4f}m/s "
@@ -353,6 +381,67 @@ def _print_wheelchair_speed_stats(samples):
         f"centerline_y_final_mean={centerline_y[-env_count:].mean().item():.4f}m "
         f"heading_y_mean={heading_y.mean().item():.4f} "
         f"heading_y_abs_mean={torch.abs(heading_y).mean().item():.4f}",
+        flush=True,
+    )
+
+
+def _sample_wheelchair_rail_wrench_stats(env, samples):
+    """Collect the wheelchair root/body incoming joint wrench for rail diagnostics."""
+    try:
+        wheelchair = env.unwrapped.scene["wheelchair"]
+        if "_body_id" not in samples:
+            body_ids, body_names = wheelchair.find_bodies("base_link")
+            if not body_ids:
+                raise RuntimeError("No wheelchair body matched 'base_link'.")
+            samples["_body_id"] = body_ids[0]
+            samples["_body_name"] = body_names[0]
+            print(
+                "[INFO] Sampling wheelchair incoming-joint wrench "
+                f"body={body_names[0]} body_id={body_ids[0]}",
+                flush=True,
+            )
+        wrench = wheelchair.data.body_incoming_joint_wrench_b[:, samples["_body_id"], :]
+        samples["force"].append(wrench[:, :3].detach().cpu())
+        samples["torque"].append(wrench[:, 3:].detach().cpu())
+    except Exception as err:
+        if not samples.get("warned"):
+            print(f"[WARN] Failed to sample wheelchair rail wrench stats: {err}", flush=True)
+            samples["warned"] = True
+
+
+def _print_wheelchair_rail_wrench_stats(samples):
+    """Print the sampled wheelchair rail reaction wrench."""
+    if not samples["force"]:
+        print("[WARN] No wheelchair rail wrench samples collected.", flush=True)
+        return
+
+    force = torch.cat(samples["force"])
+    torque = torch.cat(samples["torque"])
+    yaw_torque = torque[:, 2]
+    yaw_torque_abs = torch.abs(yaw_torque)
+    print("[INFO] Wheelchair rail incoming-joint wrench stats:", flush=True)
+    print(
+        "[INFO] "
+        f"body={samples.get('_body_name', 'unknown')} "
+        f"samples={force.shape[0]} "
+        f"force_x_mean={force[:, 0].mean().item():.4f}N "
+        f"force_y_abs_mean={torch.abs(force[:, 1]).mean().item():.4f}N "
+        f"force_z_abs_mean={torch.abs(force[:, 2]).mean().item():.4f}N",
+        flush=True,
+    )
+    print(
+        "[INFO] "
+        f"yaw_torque_mean={yaw_torque.mean().item():.4f}Nm "
+        f"yaw_torque_abs_mean={yaw_torque_abs.mean().item():.4f}Nm "
+        f"yaw_torque_abs_p95={torch.quantile(yaw_torque_abs, 0.95).item():.4f}Nm "
+        f"yaw_torque_abs_max={yaw_torque_abs.max().item():.4f}Nm",
+        flush=True,
+    )
+    print(
+        "[INFO] "
+        f"roll_torque_abs_mean={torch.abs(torque[:, 0]).mean().item():.4f}Nm "
+        f"pitch_torque_abs_mean={torch.abs(torque[:, 1]).mean().item():.4f}Nm "
+        f"torque_norm_mean={torch.linalg.norm(torque, dim=1).mean().item():.4f}Nm",
         flush=True,
     )
 
@@ -525,6 +614,15 @@ def main():
         "heading_y": [],
         "command_x": [],
     }
+    rail_wrench_samples = {
+        "force": [],
+        "torque": [],
+    }
+    stats_steps = 0
+    if args_cli.print_wheelchair_speed_stats:
+        stats_steps = max(stats_steps, args_cli.speed_stats_steps)
+    if args_cli.print_wheelchair_rail_wrench_stats:
+        stats_steps = max(stats_steps, args_cli.rail_wrench_stats_steps)
     timestep = 0
     # simulate environment
     while simulation_app.is_running():
@@ -541,12 +639,14 @@ def main():
             obs, _, _, _ = env.step(actions)
             if args_cli.print_wheelchair_speed_stats:
                 _sample_wheelchair_speed_stats(base_env, speed_samples)
+            if args_cli.print_wheelchair_rail_wrench_stats:
+                _sample_wheelchair_rail_wrench_stats(base_env, rail_wrench_samples)
         timestep += 1
         if args_cli.video:
             # Exit the play loop after recording one video
             if timestep >= args_cli.video_start_step + args_cli.video_length:
                 break
-        elif args_cli.print_wheelchair_speed_stats and timestep >= args_cli.speed_stats_steps:
+        elif stats_steps > 0 and timestep >= stats_steps:
             break
 
         # time delay for real-time evaluation
@@ -556,6 +656,8 @@ def main():
 
     if args_cli.print_wheelchair_speed_stats:
         _print_wheelchair_speed_stats(speed_samples)
+    if args_cli.print_wheelchair_rail_wrench_stats:
+        _print_wheelchair_rail_wrench_stats(rail_wrench_samples)
 
     # close the simulator
     env.close()

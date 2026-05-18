@@ -11,6 +11,7 @@ from unitree_rl_lab.assets.objects.wheelchair import (
     ACTIVE_MANUAL_WHEELCHAIR_CFG,
     ACTIVE_MANUAL_WHEELCHAIR_FIXED_BASE_CFG,
     ACTIVE_MANUAL_WHEELCHAIR_NO_COLLISION_CFG,
+    ACTIVE_MANUAL_WHEELCHAIR_X_RAIL_NO_COLLISION_CFG,
 )
 from unitree_rl_lab.tasks.locomotion import mdp
 from unitree_rl_lab.tasks.locomotion.agents.rsl_rl_ppo_cfg import BasePPORunnerCfg
@@ -366,6 +367,14 @@ class NoCollisionDynamicWheelchairPushSceneCfg(DynamicWheelchairPushSceneCfg):
     """Wheelchair scene that preserves handles/state but disables chair collisions."""
 
     wheelchair = ACTIVE_MANUAL_WHEELCHAIR_NO_COLLISION_CFG.replace(prim_path="{ENV_REGEX_NS}/Wheelchair")
+    wheelchair.init_state.pos = DYNAMIC_WHEELCHAIR_INIT_POS
+
+
+@configclass
+class PhysXRailNoCollisionDynamicWheelchairPushSceneCfg(DynamicWheelchairPushSceneCfg):
+    """No-collision wheelchair scene with a real prismatic X-rail articulation joint."""
+
+    wheelchair = ACTIVE_MANUAL_WHEELCHAIR_X_RAIL_NO_COLLISION_CFG.replace(prim_path="{ENV_REGEX_NS}/Wheelchair")
     wheelchair.init_state.pos = DYNAMIC_WHEELCHAIR_INIT_POS
 
 
@@ -1150,6 +1159,59 @@ class MinimalXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedPPORunner
     experiment_name = "unitree_g1_29dof_wheelchair_minimal_x_rail_fast_lean_velocity_progress_push_attached"
     max_iterations = 1000
     save_interval = 50
+
+
+@configclass
+class MinimalPhysXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedRobotEnvCfg(
+    MinimalXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """Playback diagnostic that replaces the kinematic X rail with a PhysX prismatic joint."""
+
+    scene: PhysXRailNoCollisionDynamicWheelchairPushSceneCfg = PhysXRailNoCollisionDynamicWheelchairPushSceneCfg(
+        num_envs=2048,
+        env_spacing=4.0,
+    )
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.events.constrain_wheelchair_to_forward_rail = None
+        self.observations.policy.wheelchair_root_state.params["wheelchair_cfg"] = SceneEntityCfg(
+            "wheelchair", body_names="base_link"
+        )
+        self.observations.critic.wheelchair_root_state.params["wheelchair_cfg"] = SceneEntityCfg(
+            "wheelchair", body_names="base_link"
+        )
+        base_link_cfg = SceneEntityCfg("wheelchair", body_names="base_link")
+        for reward_name in (
+            "wheelchair_track_forward_velocity",
+            "wheelchair_forward_progress",
+            "wheelchair_backward_velocity",
+            "wheelchair_lateral_velocity",
+            "wheelchair_forward_line",
+            "wheelchair_yaw_velocity",
+            "wheelchair_root_heading",
+            "wheelchair_forward_heading",
+            "wheelchair_tilt",
+        ):
+            if hasattr(self.rewards, reward_name):
+                getattr(self.rewards, reward_name).params["asset_cfg"] = base_link_cfg
+
+
+@configclass
+class MinimalPhysXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    MinimalPhysXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalPhysXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedPPORunnerCfg(
+    MinimalXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_minimal_physx_rail_fast_lean_velocity_progress_push_attached"
 
 
 @configclass

@@ -15,6 +15,30 @@ from isaaclab.sensors import ContactSensor
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
+
+def _root_or_selected_body_state(
+    asset: Articulation,
+    asset_cfg: SceneEntityCfg,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Return root state unless the cfg selects a specific body."""
+
+    if isinstance(asset_cfg.body_ids, slice):
+        return (
+            asset.data.root_pos_w,
+            asset.data.root_quat_w,
+            asset.data.root_lin_vel_w,
+            asset.data.root_ang_vel_w,
+        )
+
+    body_id = asset_cfg.body_ids[0] if isinstance(asset_cfg.body_ids, list) else int(asset_cfg.body_ids)
+    return (
+        asset.data.body_pos_w[:, body_id, :],
+        asset.data.body_quat_w[:, body_id, :],
+        asset.data.body_lin_vel_w[:, body_id, :],
+        asset.data.body_ang_vel_w[:, body_id, :],
+    )
+
+
 """
 Joint penalties.
 """
@@ -175,10 +199,11 @@ def wheelchair_forward_velocity_exp(
     std: float = 0.25,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
 ) -> torch.Tensor:
-    """Reward the wheelchair root for matching the commanded forward velocity in world X."""
+    """Reward the wheelchair root/body for matching the commanded forward velocity in world X."""
     wheelchair: Articulation = env.scene[asset_cfg.name]
+    _, _, lin_vel_w, _ = _root_or_selected_body_state(wheelchair, asset_cfg)
     command_x = env.command_manager.get_command(command_name)[:, 0]
-    velocity_error = torch.square(wheelchair.data.root_lin_vel_w[:, 0] - command_x)
+    velocity_error = torch.square(lin_vel_w[:, 0] - command_x)
     return torch.exp(-velocity_error / (std * std))
 
 
@@ -189,16 +214,18 @@ def wheelchair_forward_progress(
 ) -> torch.Tensor:
     """Reward positive wheelchair forward velocity."""
     wheelchair: Articulation = env.scene[asset_cfg.name]
-    return torch.clamp(wheelchair.data.root_lin_vel_w[:, 0], min=0.0, max=max_velocity)
+    _, _, lin_vel_w, _ = _root_or_selected_body_state(wheelchair, asset_cfg)
+    return torch.clamp(lin_vel_w[:, 0], min=0.0, max=max_velocity)
 
 
 def wheelchair_backward_velocity_l2(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
 ) -> torch.Tensor:
-    """Penalize the wheelchair root for moving backward along world X."""
+    """Penalize the wheelchair root/body for moving backward along world X."""
     wheelchair: Articulation = env.scene[asset_cfg.name]
-    backward_velocity = torch.clamp(-wheelchair.data.root_lin_vel_w[:, 0], min=0.0)
+    _, _, lin_vel_w, _ = _root_or_selected_body_state(wheelchair, asset_cfg)
+    backward_velocity = torch.clamp(-lin_vel_w[:, 0], min=0.0)
     return torch.square(backward_velocity)
 
 
@@ -208,7 +235,8 @@ def wheelchair_lateral_velocity_l2(
 ) -> torch.Tensor:
     """Penalize the wheelchair drifting sideways."""
     wheelchair: Articulation = env.scene[asset_cfg.name]
-    return torch.square(wheelchair.data.root_lin_vel_w[:, 1])
+    _, _, lin_vel_w, _ = _root_or_selected_body_state(wheelchair, asset_cfg)
+    return torch.square(lin_vel_w[:, 1])
 
 
 def wheelchair_forward_line_l2(
@@ -216,9 +244,10 @@ def wheelchair_forward_line_l2(
     allowed_error: float = 0.05,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
 ) -> torch.Tensor:
-    """Penalize the wheelchair root drifting away from the environment forward centerline."""
+    """Penalize the wheelchair root/body drifting away from the environment forward centerline."""
     wheelchair: Articulation = env.scene[asset_cfg.name]
-    lateral_position = wheelchair.data.root_pos_w[:, 1] - env.scene.env_origins[:, 1]
+    pos_w, _, _, _ = _root_or_selected_body_state(wheelchair, asset_cfg)
+    lateral_position = pos_w[:, 1] - env.scene.env_origins[:, 1]
     lateral_error = torch.clamp(torch.abs(lateral_position) - allowed_error, min=0.0)
     return torch.square(lateral_error)
 
@@ -229,11 +258,12 @@ def root_xy_position_l2(
     allowed_error: float = 0.0,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
 ) -> torch.Tensor:
-    """Penalize an articulation root drifting from a target XY offset in each env."""
+    """Penalize an articulation root/body drifting from a target XY offset in each env."""
     asset: Articulation = env.scene[asset_cfg.name]
-    target_xy_tensor = torch.tensor(target_xy, device=env.device, dtype=asset.data.root_pos_w.dtype).unsqueeze(0)
+    pos_w, _, _, _ = _root_or_selected_body_state(asset, asset_cfg)
+    target_xy_tensor = torch.tensor(target_xy, device=env.device, dtype=pos_w.dtype).unsqueeze(0)
     target_xy_w = env.scene.env_origins[:, :2] + target_xy_tensor
-    position_error = torch.linalg.norm(asset.data.root_pos_w[:, :2] - target_xy_w, dim=-1)
+    position_error = torch.linalg.norm(pos_w[:, :2] - target_xy_w, dim=-1)
     position_error = torch.clamp(position_error - allowed_error, min=0.0)
     return torch.square(position_error)
 
@@ -244,9 +274,10 @@ def root_height_l2(
     allowed_error: float = 0.0,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
 ) -> torch.Tensor:
-    """Penalize an articulation root drifting from a target world Z height."""
+    """Penalize an articulation root/body drifting from a target world Z height."""
     asset: Articulation = env.scene[asset_cfg.name]
-    height_error = torch.abs(asset.data.root_pos_w[:, 2] - (env.scene.env_origins[:, 2] + target_height))
+    pos_w, _, _, _ = _root_or_selected_body_state(asset, asset_cfg)
+    height_error = torch.abs(pos_w[:, 2] - (env.scene.env_origins[:, 2] + target_height))
     height_error = torch.clamp(height_error - allowed_error, min=0.0)
     return torch.square(height_error)
 
@@ -256,12 +287,11 @@ def root_heading_lateral_l2(
     allowed_error: float = 0.0,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
 ) -> torch.Tensor:
-    """Penalize yaw drift from the world-X heading using the root forward axis."""
+    """Penalize yaw drift from the world-X heading using the root/body forward axis."""
     asset: Articulation = env.scene[asset_cfg.name]
-    x_axis_b = torch.tensor([1.0, 0.0, 0.0], device=env.device, dtype=asset.data.root_quat_w.dtype).expand(
-        env.num_envs, 3
-    )
-    x_axis_w = quat_apply(asset.data.root_quat_w, x_axis_b)
+    _, quat_w, _, _ = _root_or_selected_body_state(asset, asset_cfg)
+    x_axis_b = torch.tensor([1.0, 0.0, 0.0], device=env.device, dtype=quat_w.dtype).expand(env.num_envs, 3)
+    x_axis_w = quat_apply(quat_w, x_axis_b)
     heading_error = torch.clamp(torch.abs(x_axis_w[:, 1]) - allowed_error, min=0.0)
     return torch.square(heading_error)
 
@@ -271,12 +301,11 @@ def root_forward_heading_l2(
     allowed_error: float = 0.0,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
 ) -> torch.Tensor:
-    """Penalize an articulation root facing away from the world-X forward direction."""
+    """Penalize an articulation root/body facing away from the world-X forward direction."""
     asset: Articulation = env.scene[asset_cfg.name]
-    x_axis_b = torch.tensor([1.0, 0.0, 0.0], device=env.device, dtype=asset.data.root_quat_w.dtype).expand(
-        env.num_envs, 3
-    )
-    x_axis_w = quat_apply(asset.data.root_quat_w, x_axis_b)
+    _, quat_w, _, _ = _root_or_selected_body_state(asset, asset_cfg)
+    x_axis_b = torch.tensor([1.0, 0.0, 0.0], device=env.device, dtype=quat_w.dtype).expand(env.num_envs, 3)
+    x_axis_w = quat_apply(quat_w, x_axis_b)
     heading_error = torch.clamp((1.0 - x_axis_w[:, 0]) - allowed_error, min=0.0)
     return torch.square(heading_error)
 
@@ -287,7 +316,8 @@ def wheelchair_yaw_velocity_l2(
 ) -> torch.Tensor:
     """Penalize the wheelchair spinning while being pushed."""
     wheelchair: Articulation = env.scene[asset_cfg.name]
-    return torch.square(wheelchair.data.root_ang_vel_w[:, 2])
+    _, _, _, ang_vel_w = _root_or_selected_body_state(wheelchair, asset_cfg)
+    return torch.square(ang_vel_w[:, 2])
 
 
 def wheelchair_tilt_l2(
@@ -296,7 +326,12 @@ def wheelchair_tilt_l2(
 ) -> torch.Tensor:
     """Penalize wheelchair roll/pitch by using projected gravity in the chair body frame."""
     wheelchair: Articulation = env.scene[asset_cfg.name]
-    return torch.sum(torch.square(wheelchair.data.projected_gravity_b[:, :2]), dim=-1)
+    if isinstance(asset_cfg.body_ids, slice):
+        projected_gravity_b = wheelchair.data.projected_gravity_b
+    else:
+        _, quat_w, _, _ = _root_or_selected_body_state(wheelchair, asset_cfg)
+        projected_gravity_b = quat_apply_inverse(quat_w, wheelchair.data.GRAVITY_VEC_W)
+    return torch.sum(torch.square(projected_gravity_b[:, :2]), dim=-1)
 
 
 def wheelchair_wheel_height_l2(
@@ -319,7 +354,8 @@ def root_lin_vel_xy_l2(
 ) -> torch.Tensor:
     """Penalize root XY linear velocity for any scene articulation."""
     asset: Articulation = env.scene[asset_cfg.name]
-    return torch.sum(torch.square(asset.data.root_lin_vel_w[:, :2]), dim=-1)
+    _, _, lin_vel_w, _ = _root_or_selected_body_state(asset, asset_cfg)
+    return torch.sum(torch.square(lin_vel_w[:, :2]), dim=-1)
 
 
 def root_ang_vel_z_l2(
@@ -328,7 +364,8 @@ def root_ang_vel_z_l2(
 ) -> torch.Tensor:
     """Penalize root yaw angular velocity for any scene articulation."""
     asset: Articulation = env.scene[asset_cfg.name]
-    return torch.square(asset.data.root_ang_vel_w[:, 2])
+    _, _, _, ang_vel_w = _root_or_selected_body_state(asset, asset_cfg)
+    return torch.square(ang_vel_w[:, 2])
 
 
 def filtered_contact_presence(

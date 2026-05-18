@@ -23,6 +23,9 @@ def _repo_root() -> Path:
 
 ACTIVE_MANUAL_WHEELCHAIR_ROOT = _repo_root() / "assets" / "objects" / "wheelchair" / "free3d_active_wheelchair"
 ACTIVE_MANUAL_WHEELCHAIR_URDF = ACTIVE_MANUAL_WHEELCHAIR_ROOT / "urdf" / "active_manual_wheelchair.urdf"
+ACTIVE_MANUAL_WHEELCHAIR_X_RAIL_URDF = (
+    ACTIVE_MANUAL_WHEELCHAIR_ROOT / "urdf" / "active_manual_wheelchair_x_rail.urdf"
+)
 
 
 ACTIVE_MANUAL_WHEELCHAIR_CFG = ArticulationCfg(
@@ -78,3 +81,11 @@ ACTIVE_MANUAL_WHEELCHAIR_NO_COLLISION_CFG.spawn.collision_props = sim_utils.Coll
     collision_enabled=False
 )
 ACTIVE_MANUAL_WHEELCHAIR_NO_COLLISION_CFG.spawn.rigid_props.disable_gravity = True
+
+ACTIVE_MANUAL_WHEELCHAIR_X_RAIL_CFG = copy.deepcopy(ACTIVE_MANUAL_WHEELCHAIR_CFG)
+ACTIVE_MANUAL_WHEELCHAIR_X_RAIL_CFG.spawn.asset_path = str(ACTIVE_MANUAL_WHEELCHAIR_X_RAIL_URDF)
+ACTIVE_MANUAL_WHEELCHAIR_X_RAIL_CFG.spawn.fix_base = True
+
+ACTIVE_MANUAL_WHEELCHAIR_X_RAIL_NO_COLLISION_CFG = copy.deepcopy(ACTIVE_MANUAL_WHEELCHAIR_NO_COLLISION_CFG)
+ACTIVE_MANUAL_WHEELCHAIR_X_RAIL_NO_COLLISION_CFG.spawn.asset_path = str(ACTIVE_MANUAL_WHEELCHAIR_X_RAIL_URDF)
+ACTIVE_MANUAL_WHEELCHAIR_X_RAIL_NO_COLLISION_CFG.spawn.fix_base = True
