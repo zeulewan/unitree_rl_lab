@@ -1262,18 +1262,18 @@ class MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedPPORunnerCfg(
     max_iterations = 1000
     save_interval = 50
     algorithm = RslRlPpoAlgorithmCfg(
-        value_loss_coef=0.5,
+        value_loss_coef=0.0,
         use_clipped_value_loss=True,
         clip_param=0.03,
         entropy_coef=0.0,
         num_learning_epochs=2,
         num_mini_batches=4,
-        learning_rate=5.0e-6,
-        schedule="adaptive",
+        learning_rate=1.0e-6,
+        schedule="fixed",
         gamma=0.99,
         lam=0.95,
-        desired_kl=0.00025,
-        max_grad_norm=0.05,
+        desired_kl=None,
+        max_grad_norm=0.02,
     )
 
 

@@ -59,6 +59,12 @@ parser.add_argument(
     help="When resuming, overwrite the loaded scalar policy exploration std.",
 )
 parser.add_argument(
+    "--freeze_policy_std",
+    action="store_true",
+    default=False,
+    help="When resuming, keep the scalar policy exploration std fixed after loading.",
+)
+parser.add_argument(
     "--distributed", action="store_true", default=False, help="Run training with multiple GPUs or nodes."
 )
 # append RSL-RL cli arguments
@@ -221,9 +227,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             if hasattr(policy, "std"):
                 policy.std.data.fill_(args_cli.policy_std)
                 print(f"[INFO]: Set scalar policy std to {args_cli.policy_std}.")
+                if args_cli.freeze_policy_std:
+                    policy.std.requires_grad_(False)
+                    print("[INFO]: Froze scalar policy std.")
             elif hasattr(policy, "log_std"):
                 policy.log_std.data.fill_(torch.log(torch.tensor(args_cli.policy_std, device=policy.log_std.device)))
                 print(f"[INFO]: Set log policy std from scalar value {args_cli.policy_std}.")
+                if args_cli.freeze_policy_std:
+                    policy.log_std.requires_grad_(False)
+                    print("[INFO]: Froze log policy std.")
 
     # dump the configuration into log-directory
     dump_yaml(os.path.join(log_dir, "params", "env.yaml"), env_cfg)
