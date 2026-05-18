@@ -1230,6 +1230,7 @@ class MinimalPhysXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedRobot
     def __post_init__(self):
         super().__post_init__()
 
+        self.commands.base_velocity.debug_vis = False
         self.scene.robot.spawn.rigid_props.max_linear_velocity = 20.0
         self.scene.robot.spawn.rigid_props.max_angular_velocity = 40.0
         env_step_dt = self.decimation * self.sim.dt
