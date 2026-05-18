@@ -196,7 +196,7 @@ from isaaclab_tasks.utils import get_checkpoint_path
 import unitree_rl_lab.tasks  # noqa: F401
 from unitree_rl_lab.utils.parser_cfg import parse_env_cfg
 
-from pxr import UsdGeom
+from pxr import Gf, UsdGeom, UsdPhysics
 import omni.usd
 
 
@@ -308,6 +308,49 @@ def _print_hand_handle_offsets(env):
                 local_pos0_attr = joint_prim.GetAttribute("physics:localPos0")
                 if local_pos0_attr.IsValid():
                     joint_local_pos0 = list(local_pos0_attr.Get())
+            stage_joint_offset_m = None
+            stage_joint_offset_w = None
+            stage_joint_rot_deg = None
+            if joint_prim.IsValid():
+                joint = UsdPhysics.Joint(joint_prim)
+                cache = UsdGeom.XformCache()
+
+                def _attachment_world(index: int):
+                    if index == 0:
+                        local_pos_attr = joint.GetLocalPos0Attr()
+                        local_rot_attr = joint.GetLocalRot0Attr()
+                        body_rel = joint.GetBody0Rel()
+                    else:
+                        local_pos_attr = joint.GetLocalPos1Attr()
+                        local_rot_attr = joint.GetLocalRot1Attr()
+                        body_rel = joint.GetBody1Rel()
+                    targets = body_rel.GetTargets()
+                    if not targets:
+                        return None
+                    body_prim = stage.GetPrimAtPath(targets[0])
+                    if not body_prim.IsValid():
+                        return None
+                    local_pos = local_pos_attr.Get() if local_pos_attr.IsValid() else Gf.Vec3f(0.0)
+                    local_rot = local_rot_attr.Get() if local_rot_attr.IsValid() else Gf.Quatf(1.0)
+                    local_pos = Gf.Vec3d(float(local_pos[0]), float(local_pos[1]), float(local_pos[2]))
+                    imag = local_rot.GetImaginary()
+                    local_rot = Gf.Quatd(
+                        float(local_rot.GetReal()),
+                        Gf.Vec3d(float(imag[0]), float(imag[1]), float(imag[2])),
+                    )
+                    body_world = cache.GetLocalToWorldTransform(body_prim)
+                    return Gf.Matrix4d().SetRotate(local_rot) * (
+                        Gf.Matrix4d().SetTranslate(local_pos) * body_world
+                    ).RemoveScaleShear()
+
+                attachment0 = _attachment_world(0)
+                attachment1 = _attachment_world(1)
+                if attachment0 is not None and attachment1 is not None:
+                    stage_delta = attachment1 * attachment0.GetInverse()
+                    stage_translation = stage_delta.ExtractTranslation()
+                    stage_joint_offset_w = [float(stage_translation[0]), float(stage_translation[1]), float(stage_translation[2])]
+                    stage_joint_offset_m = float(stage_translation.GetLength())
+                    stage_joint_rot_deg = abs(float(stage_delta.ExtractRotation().GetAngle()))
             print(
                 "[INFO] "
                 f"{side_name}: handle_minus_hand_w={offset_w[env_index, side_index].detach().cpu().tolist()} "
@@ -315,7 +358,10 @@ def _print_hand_handle_offsets(env):
                 f"handle_minus_grip_w={grip_offset_w[env_index, side_index].detach().cpu().tolist()} "
                 f"grip_error_m={float(grip_error[env_index, side_index].detach().cpu()):.6f} "
                 f"suggested_grip_local={suggested_grip_offsets_b[env_index, side_index].detach().cpu().tolist()} "
-                f"joint_local_pos0={joint_local_pos0}",
+                f"joint_local_pos0={joint_local_pos0} "
+                f"stage_joint_offset_w={stage_joint_offset_w} "
+                f"stage_joint_offset_m={stage_joint_offset_m} "
+                f"stage_joint_rot_deg={stage_joint_rot_deg}",
                 flush=True,
             )
         print(f"[INFO] robot_root_w={robot.data.root_pos_w[env_index].detach().cpu().tolist()}", flush=True)

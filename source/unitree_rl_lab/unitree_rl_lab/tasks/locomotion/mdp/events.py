@@ -27,20 +27,92 @@ def _quatf(value) -> Gf.Quatf:
     return Gf.Quatf(float(value.GetReal()), _vec3f(imag))
 
 
+def _set_xform_pose(prim, pos, quat) -> None:
+    """Author a prim local pose while preserving existing scale ops."""
+
+    xform = UsdGeom.Xformable(prim)
+    translate_op = None
+    orient_op = None
+    for op in xform.GetOrderedXformOps():
+        if op.GetOpType() == UsdGeom.XformOp.TypeTranslate:
+            translate_op = op
+        elif op.GetOpType() == UsdGeom.XformOp.TypeOrient:
+            orient_op = op
+    if translate_op is None:
+        translate_op = xform.AddTranslateOp(precision=UsdGeom.XformOp.PrecisionDouble)
+    if orient_op is None:
+        orient_op = xform.AddOrientOp(precision=UsdGeom.XformOp.PrecisionDouble)
+
+    translate_type = translate_op.GetAttr().GetTypeName()
+    if translate_type == Sdf.ValueTypeNames.Double3:
+        translate_op.Set(Gf.Vec3d(float(pos[0]), float(pos[1]), float(pos[2])))
+    else:
+        translate_op.Set(_vec3f(pos))
+
+    orient_type = orient_op.GetAttr().GetTypeName()
+    if orient_type == Sdf.ValueTypeNames.Quatd:
+        orient_op.Set(Gf.Quatd(float(quat[0]), Gf.Vec3d(float(quat[1]), float(quat[2]), float(quat[3]))))
+    else:
+        orient_op.Set(Gf.Quatf(float(quat[0]), Gf.Vec3f(float(quat[1]), float(quat[2]), float(quat[3]))))
+
+
+def _sync_attachment_stage_xforms(
+    env,
+    env_ids,
+    attachments: Sequence[dict[str, object]],
+    robot_prim_name: str,
+    wheelchair_prim_name: str,
+    robot_asset_name: str,
+    wheelchair_asset_name: str,
+) -> None:
+    """Mirror runtime body poses into USD prim xforms before creating cross-asset joints."""
+
+    env.scene.write_data_to_sim()
+    env.sim.forward()
+
+    stage = env.sim.get_initial_stage()
+    robot = env.scene[robot_asset_name]
+    wheelchair = env.scene[wheelchair_asset_name]
+    assets = {
+        robot_prim_name: robot,
+        wheelchair_prim_name: wheelchair,
+    }
+    body_names = {
+        robot_prim_name: [str(attachment["robot_body"]) for attachment in attachments],
+        wheelchair_prim_name: [str(attachment["wheelchair_body"]) for attachment in attachments],
+    }
+
+    for env_index in _iter_env_indices(env_ids, env.num_envs):
+        env_path = env.scene.env_prim_paths[env_index]
+        for prim_name, asset in assets.items():
+            root_pos_w = asset.data.root_pos_w[env_index]
+            root_quat_w = asset.data.root_quat_w[env_index]
+            root_quat_inv = math_utils.quat_inv(root_quat_w.unsqueeze(0))[0]
+            for body_name in set(body_names[prim_name]):
+                body_id = asset.data.body_names.index(body_name)
+                body_pos_w = asset.data.body_pos_w[env_index, body_id]
+                body_quat_w = asset.data.body_quat_w[env_index, body_id]
+                body_pos_b = math_utils.quat_apply_inverse(
+                    root_quat_w.unsqueeze(0), (body_pos_w - root_pos_w).unsqueeze(0)
+                )[0]
+                body_quat_b = math_utils.quat_mul(root_quat_inv.unsqueeze(0), body_quat_w.unsqueeze(0))[0]
+                prim = stage.GetPrimAtPath(f"{env_path}/{prim_name}/{body_name}")
+                if prim.IsValid():
+                    _set_xform_pose(prim, body_pos_b.detach().cpu().tolist(), body_quat_b.detach().cpu().tolist())
+
+
 def _set_joint_frame_at_body1(stage, joint: UsdPhysics.Joint, body0_path: str, body1_path: str) -> None:
     """Place the joint frame at body1 while preserving the current body0 offset."""
 
     cache = UsdGeom.XformCache()
-    body0_world = Gf.Transform(cache.GetLocalToWorldTransform(stage.GetPrimAtPath(body0_path)))
-    body1_world = Gf.Transform(cache.GetLocalToWorldTransform(stage.GetPrimAtPath(body1_path)))
+    body0_world = cache.GetLocalToWorldTransform(stage.GetPrimAtPath(body0_path)).RemoveScaleShear()
+    body1_world = cache.GetLocalToWorldTransform(stage.GetPrimAtPath(body1_path)).RemoveScaleShear()
+    body1_in_body0 = Gf.Transform(body1_world * body0_world.GetInverse())
 
-    local0 = Gf.Transform(body0_world.GetMatrix().GetInverse()) * body1_world
-    local1 = Gf.Transform(body1_world.GetMatrix().GetInverse()) * body1_world
-
-    joint.CreateLocalPos0Attr().Set(_vec3f(local0.GetTranslation()))
-    joint.CreateLocalRot0Attr().Set(_quatf(local0.GetRotation().GetQuat()))
-    joint.CreateLocalPos1Attr().Set(_vec3f(local1.GetTranslation()))
-    joint.CreateLocalRot1Attr().Set(_quatf(local1.GetRotation().GetQuat()))
+    joint.CreateLocalPos0Attr().Set(_vec3f(body1_in_body0.GetTranslation()))
+    joint.CreateLocalRot0Attr().Set(_quatf(body1_in_body0.GetRotation().GetQuat()))
+    joint.CreateLocalPos1Attr().Set(Gf.Vec3f(0.0, 0.0, 0.0))
+    joint.CreateLocalRot1Attr().Set(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
 
 
 def _set_joint_frame_at_body_origins(joint: UsdPhysics.Joint) -> None:
@@ -63,9 +135,9 @@ def _set_joint_frame_at_local_offsets(
     """Attach two explicit local points instead of the rigid-body origins."""
 
     cache = UsdGeom.XformCache()
-    body0_world = Gf.Transform(cache.GetLocalToWorldTransform(stage.GetPrimAtPath(body0_path)))
-    body1_world = Gf.Transform(cache.GetLocalToWorldTransform(stage.GetPrimAtPath(body1_path)))
-    body1_in_body0 = Gf.Transform(body0_world.GetMatrix().GetInverse()) * body1_world
+    body0_world = cache.GetLocalToWorldTransform(stage.GetPrimAtPath(body0_path)).RemoveScaleShear()
+    body1_world = cache.GetLocalToWorldTransform(stage.GetPrimAtPath(body1_path)).RemoveScaleShear()
+    body1_in_body0 = Gf.Transform(body1_world * body0_world.GetInverse())
 
     joint.CreateLocalPos0Attr().Set(_vec3f(body0_local_pos))
     joint.CreateLocalRot0Attr().Set(_quatf(body1_in_body0.GetRotation().GetQuat()))
@@ -181,18 +253,45 @@ def attach_wheelchair_hands_to_handles(
     attachments: Sequence[dict[str, object]],
     robot_prim_name: str = "Robot",
     wheelchair_prim_name: str = "Wheelchair",
+    robot_asset_name: str = "robot",
+    wheelchair_asset_name: str = "wheelchair",
     joint_root_name: str = "HandHandleFixedJoints",
     joint_type: str = "spherical",
     mask_collisions: bool = True,
     anchor_at_body_origins: bool = False,
     skip_existing: bool = False,
+    align_stage_to_runtime: bool = False,
 ) -> None:
     """Create USD joints from G1 hand bodies to wheelchair handle bodies."""
 
     stage = env.sim.get_initial_stage()
     missing_paths: list[str] = []
+    env_indices = list(_iter_env_indices(env_ids, env.num_envs))
+    if align_stage_to_runtime:
+        envs_requiring_joint_creation = []
+        for env_index in env_indices:
+            env_path = env.scene.env_prim_paths[env_index]
+            joint_root_path = f"{env_path}/{joint_root_name}"
+            if not skip_existing:
+                envs_requiring_joint_creation.append(env_index)
+                continue
+            for attachment in attachments:
+                joint_path = f"{joint_root_path}/{attachment['joint_name']}"
+                if not stage.GetPrimAtPath(joint_path).IsValid():
+                    envs_requiring_joint_creation.append(env_index)
+                    break
+        if envs_requiring_joint_creation:
+            _sync_attachment_stage_xforms(
+                env,
+                envs_requiring_joint_creation,
+                attachments,
+                robot_prim_name,
+                wheelchair_prim_name,
+                robot_asset_name,
+                wheelchair_asset_name,
+            )
 
-    for env_index in _iter_env_indices(env_ids, env.num_envs):
+    for env_index in env_indices:
         env_path = env.scene.env_prim_paths[env_index]
         joint_root_path = f"{env_path}/{joint_root_name}"
         stage.DefinePrim(joint_root_path, "Xform")

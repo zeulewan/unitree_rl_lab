@@ -753,6 +753,7 @@ class DynamicWheelchairPushAttachedRobotEnvCfg(DynamicWheelchairPushObservedRobo
                 "mask_collisions": True,
                 "anchor_at_body_origins": False,
                 "skip_existing": True,
+                "align_stage_to_runtime": True,
             },
         )
 
@@ -1311,6 +1312,7 @@ class MinimalPhysXRailFastLeanVelocityProgressHardAttachDynamicWheelchairPushAtt
                 "mask_collisions": True,
                 "anchor_at_body_origins": False,
                 "skip_existing": True,
+                "align_stage_to_runtime": True,
             },
         )
 
@@ -1412,6 +1414,7 @@ class MinimalPhysXRail1mpsYawTorqueHardAttachDynamicWheelchairPushAttachedRobotE
                 "mask_collisions": True,
                 "anchor_at_body_origins": False,
                 "skip_existing": True,
+                "align_stage_to_runtime": True,
             },
         )
 
