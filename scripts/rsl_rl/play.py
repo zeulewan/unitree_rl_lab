@@ -43,6 +43,14 @@ parser.add_argument(
     help="Camera eye offset from the first robot when --video-follow-robot is set.",
 )
 parser.add_argument(
+    "--video-camera-eye-end-offset",
+    type=float,
+    nargs=3,
+    default=None,
+    metavar=("X", "Y", "Z"),
+    help="Optional final camera eye offset for zoom-out follow-camera videos.",
+)
+parser.add_argument(
     "--video-camera-target-offset",
     type=float,
     nargs=3,
@@ -206,11 +214,15 @@ def _set_follow_camera(env, timestep: int = 0):
         root_pos = root_pos_w[env_index].cpu()
         eye_offset = torch.tensor(args_cli.video_camera_eye_offset, dtype=root_pos.dtype)
         target_offset = torch.tensor(args_cli.video_camera_target_offset, dtype=root_pos.dtype)
+        progress = 0.0
+        if args_cli.video_length > 0:
+            progress = (timestep - args_cli.video_start_step) / float(args_cli.video_length)
+            progress = max(0.0, min(1.0, progress))
+        if args_cli.video_camera_eye_end_offset is not None:
+            end_eye_offset = torch.tensor(args_cli.video_camera_eye_end_offset, dtype=root_pos.dtype)
+            smooth_progress = progress * progress * (3.0 - 2.0 * progress)
+            eye_offset = eye_offset + (end_eye_offset - eye_offset) * smooth_progress
         if args_cli.video_camera_orbit_deg != 0.0:
-            progress = 0.0
-            if args_cli.video_length > 0:
-                progress = (timestep - args_cli.video_start_step) / float(args_cli.video_length)
-                progress = max(0.0, min(1.0, progress))
             angle = math.radians(args_cli.video_camera_orbit_deg) * progress
             cos_angle = math.cos(angle)
             sin_angle = math.sin(angle)
