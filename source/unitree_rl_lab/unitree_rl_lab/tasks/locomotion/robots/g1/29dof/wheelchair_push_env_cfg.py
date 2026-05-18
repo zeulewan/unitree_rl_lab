@@ -1271,18 +1271,18 @@ class MinimalPhysXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedRobot
             func=mdp.asset_state_out_of_bounds,
             params={
                 "asset_cfg": SceneEntityCfg("robot"),
-                "max_linear_velocity": 20.0,
-                "max_angular_velocity": 40.0,
-                "max_position_norm": 200.0,
+                "max_linear_velocity": 100.0,
+                "max_angular_velocity": 500.0,
+                "max_position_norm": 500.0,
             },
         )
         self.terminations.unstable_wheelchair_state = DoneTerm(
             func=mdp.asset_state_out_of_bounds,
             params={
                 "asset_cfg": base_link_cfg,
-                "max_linear_velocity": 10.0,
-                "max_angular_velocity": 25.0,
-                "max_position_norm": 200.0,
+                "max_linear_velocity": 50.0,
+                "max_angular_velocity": 250.0,
+                "max_position_norm": 500.0,
             },
         )
         for reward_name in (
