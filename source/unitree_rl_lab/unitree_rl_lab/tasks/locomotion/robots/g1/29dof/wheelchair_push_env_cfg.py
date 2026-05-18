@@ -1353,6 +1353,46 @@ class MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedPPORunnerCfg(
 
 
 @configclass
+class MinimalPhysXRail1mpsYawTorqueHardAttachDynamicWheelchairPushAttachedRobotEnvCfg(
+    MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """1 m/s PhysX-rail task with both hands attached by hard USD joints."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.events.soft_attach_wheelchair_hands_reset = None
+        self.events.soft_attach_wheelchair_hands = None
+        self.events.attach_wheelchair_hands = EventTerm(
+            func=mdp.attach_wheelchair_hands_to_handles,
+            mode="reset",
+            params={
+                "attachments": DYNAMIC_WHEELCHAIR_HAND_HANDLE_ATTACHMENTS,
+                "joint_type": "spherical",
+                "mask_collisions": True,
+                "anchor_at_body_origins": False,
+                "skip_existing": True,
+            },
+        )
+
+
+@configclass
+class MinimalPhysXRail1mpsYawTorqueHardAttachDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    MinimalPhysXRail1mpsYawTorqueHardAttachDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalPhysXRail1mpsYawTorqueHardAttachDynamicWheelchairPushAttachedPPORunnerCfg(
+    MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_minimal_physx_rail_1mps_yaw_torque_hard_attach_push_attached"
+
+
+@configclass
 class MinimalPhysXRail1mpsYawTorqueSoftObsDynamicWheelchairPushAttachedRobotEnvCfg(
     MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedRobotEnvCfg
 ):
