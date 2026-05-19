@@ -1358,6 +1358,125 @@ class MinimalPhysXRailFastLeanVelocityProgressHardAttachDynamicWheelchairPushAtt
 
 
 @configclass
+class MinimalPhysXRailFastLeanVelocityProgressHardAttachNoGuardDynamicWheelchairPushAttachedRobotEnvCfg(
+    MinimalPhysXRailFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """Hard-attach PhysX-rail task matching the pre-runaway-guard training behavior."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.observations.policy.base_ang_vel.clip = None
+        self.observations.policy.joint_vel_rel.clip = None
+        self.observations.critic.base_lin_vel.clip = None
+        self.observations.critic.base_ang_vel.clip = None
+        self.observations.critic.joint_vel_rel.clip = None
+        self.terminations.unstable_robot_state = None
+        self.terminations.unstable_wheelchair_state = None
+
+
+@configclass
+class MinimalPhysXRailFastLeanVelocityProgressHardAttachNoGuardDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    MinimalPhysXRailFastLeanVelocityProgressHardAttachNoGuardDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalPhysXRailFastLeanVelocityProgressHardAttachNoGuardDynamicWheelchairPushAttachedPPORunnerCfg(
+    MinimalPhysXRailFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_minimal_physx_rail_fast_lean_hard_attach_noguard_push_attached"
+
+
+@configclass
+class MinimalPhysXRailFastLeanVelocityProgressHardAttachNoTerminateDynamicWheelchairPushAttachedRobotEnvCfg(
+    MinimalPhysXRailFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """Hard-attach PhysX-rail task with clipped observations but no runaway-state early termination."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.terminations.unstable_robot_state = None
+        self.terminations.unstable_wheelchair_state = None
+
+
+@configclass
+class MinimalPhysXRailFastLeanVelocityProgressHardAttachNoTerminateDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    MinimalPhysXRailFastLeanVelocityProgressHardAttachNoTerminateDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalPhysXRailFastLeanVelocityProgressHardAttachNoTerminateDynamicWheelchairPushAttachedPPORunnerCfg(
+    MinimalPhysXRailFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = (
+        "unitree_g1_29dof_wheelchair_minimal_physx_rail_fast_lean_hard_attach_noterminate_push_attached"
+    )
+
+
+@configclass
+class MinimalPhysXRailFastLeanVelocityProgressHardAttachRobustDynamicWheelchairPushAttachedRobotEnvCfg(
+    MinimalPhysXRailFastLeanVelocityProgressHardAttachNoTerminateDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """No-termination hard-attach task with capped velocity/line penalties for PhysX outliers."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.rewards.wheelchair_lateral_velocity.params["max_velocity"] = 5.0
+        self.rewards.wheelchair_forward_line.params["max_error"] = 5.0
+        self.rewards.wheelchair_yaw_velocity.params["max_angular_velocity"] = 10.0
+        self.terminations.non_finite_wheelchair = DoneTerm(
+            func=mdp.non_finite_asset_state,
+            params={"asset_cfg": SceneEntityCfg("wheelchair", body_names="base_link")},
+        )
+        self.terminations.non_finite_robot = DoneTerm(
+            func=mdp.non_finite_asset_state,
+            params={"asset_cfg": SceneEntityCfg("robot")},
+        )
+
+
+@configclass
+class MinimalPhysXRailFastLeanVelocityProgressHardAttachRobustDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    MinimalPhysXRailFastLeanVelocityProgressHardAttachRobustDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalPhysXRailFastLeanVelocityProgressHardAttachRobustDynamicWheelchairPushAttachedPPORunnerCfg(
+    MinimalPhysXRailFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = (
+        "unitree_g1_29dof_wheelchair_minimal_physx_rail_fast_lean_hard_attach_robust_push_attached"
+    )
+    algorithm = RslRlPpoAlgorithmCfg(
+        value_loss_coef=0.0,
+        use_clipped_value_loss=True,
+        clip_param=0.03,
+        entropy_coef=0.0,
+        num_learning_epochs=2,
+        num_mini_batches=4,
+        learning_rate=1.0e-6,
+        schedule="fixed",
+        gamma=0.99,
+        lam=0.95,
+        desired_kl=None,
+        max_grad_norm=0.02,
+    )
+
+
+@configclass
 class MinimalPhysXRail1mpsYawTorqueDynamicWheelchairPushAttachedRobotEnvCfg(
     MinimalPhysXRailFastLeanVelocityProgressDynamicWheelchairPushAttachedRobotEnvCfg
 ):

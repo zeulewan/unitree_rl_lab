@@ -254,6 +254,39 @@ gym.register(
 )
 
 gym.register(
+    id="Unitree-G1-29dof-Wheelchair-Minimal-PhysX-Rail-Fast-Lean-Velocity-Progress-Push-Attached-Hard-NoGuard",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRailFastLeanVelocityProgressHardAttachNoGuardDynamicWheelchairPushAttachedRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRailFastLeanVelocityProgressHardAttachNoGuardDynamicWheelchairPushAttachedRobotPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRailFastLeanVelocityProgressHardAttachNoGuardDynamicWheelchairPushAttachedPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Unitree-G1-29dof-Wheelchair-Minimal-PhysX-Rail-Fast-Lean-Velocity-Progress-Push-Attached-Hard-NoTerminate",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRailFastLeanVelocityProgressHardAttachNoTerminateDynamicWheelchairPushAttachedRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRailFastLeanVelocityProgressHardAttachNoTerminateDynamicWheelchairPushAttachedRobotPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRailFastLeanVelocityProgressHardAttachNoTerminateDynamicWheelchairPushAttachedPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Unitree-G1-29dof-Wheelchair-Minimal-PhysX-Rail-Fast-Lean-Velocity-Progress-Push-Attached-Hard-Robust",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRailFastLeanVelocityProgressHardAttachRobustDynamicWheelchairPushAttachedRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRailFastLeanVelocityProgressHardAttachRobustDynamicWheelchairPushAttachedRobotPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRailFastLeanVelocityProgressHardAttachRobustDynamicWheelchairPushAttachedPPORunnerCfg",
+    },
+)
+
+gym.register(
     id="Unitree-G1-29dof-Wheelchair-Minimal-PhysX-Rail-1mps-Yaw-Torque-Push-Attached",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,

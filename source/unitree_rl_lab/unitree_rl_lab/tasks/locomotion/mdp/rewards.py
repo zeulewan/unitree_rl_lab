@@ -244,17 +244,22 @@ def wheelchair_backward_velocity_l2(
 
 def wheelchair_lateral_velocity_l2(
     env: ManagerBasedRLEnv,
+    max_velocity: float | None = None,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
 ) -> torch.Tensor:
     """Penalize the wheelchair drifting sideways."""
     wheelchair: Articulation = env.scene[asset_cfg.name]
     _, _, lin_vel_w, _ = _root_or_selected_body_state(wheelchair, asset_cfg)
-    return torch.square(lin_vel_w[:, 1])
+    lateral_velocity = lin_vel_w[:, 1]
+    if max_velocity is not None:
+        lateral_velocity = torch.clamp(lateral_velocity, min=-max_velocity, max=max_velocity)
+    return torch.square(lateral_velocity)
 
 
 def wheelchair_forward_line_l2(
     env: ManagerBasedRLEnv,
     allowed_error: float = 0.05,
+    max_error: float | None = None,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
 ) -> torch.Tensor:
     """Penalize the wheelchair root/body drifting away from the environment forward centerline."""
@@ -262,6 +267,8 @@ def wheelchair_forward_line_l2(
     pos_w, _, _, _ = _root_or_selected_body_state(wheelchair, asset_cfg)
     lateral_position = pos_w[:, 1] - env.scene.env_origins[:, 1]
     lateral_error = torch.clamp(torch.abs(lateral_position) - allowed_error, min=0.0)
+    if max_error is not None:
+        lateral_error = torch.clamp(lateral_error, max=max_error)
     return torch.square(lateral_error)
 
 
@@ -325,12 +332,16 @@ def root_forward_heading_l2(
 
 def wheelchair_yaw_velocity_l2(
     env: ManagerBasedRLEnv,
+    max_angular_velocity: float | None = None,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("wheelchair"),
 ) -> torch.Tensor:
     """Penalize the wheelchair spinning while being pushed."""
     wheelchair: Articulation = env.scene[asset_cfg.name]
     _, _, _, ang_vel_w = _root_or_selected_body_state(wheelchair, asset_cfg)
-    return torch.square(ang_vel_w[:, 2])
+    yaw_velocity = ang_vel_w[:, 2]
+    if max_angular_velocity is not None:
+        yaw_velocity = torch.clamp(yaw_velocity, min=-max_angular_velocity, max=max_angular_velocity)
+    return torch.square(yaw_velocity)
 
 
 def body_incoming_joint_torque_axis_l2(
