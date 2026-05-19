@@ -94,10 +94,28 @@ def latest_video(root: Path) -> Path | None:
     return max(videos, key=lambda path: path.stat().st_mtime)
 
 
+def video_metadata(path: Path) -> dict[str, object]:
+    candidates = [path.with_suffix(".json"), path.parent / "latest.json"]
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            data = json.loads(candidate.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(data, dict):
+            return data
+    return {}
+
+
 def video_info(root: Path, path: Path | None) -> dict[str, object] | None:
     if path is None:
         return None
     stat = path.stat()
+    metadata = video_metadata(path)
+    checkpoint = metadata.get("checkpoint")
+    checkpoint_name = Path(str(checkpoint)).name if checkpoint else None
+    task = metadata.get("task")
     try:
         rel_path = path.relative_to(root)
     except ValueError:
@@ -122,6 +140,9 @@ def video_info(root: Path, path: Path | None) -> dict[str, object] | None:
         "created_toronto_iso": created_toronto.isoformat(timespec="seconds"),
         "size_bytes": stat.st_size,
         "size_mb": round(stat.st_size / (1024 * 1024), 2),
+        "checkpoint": checkpoint,
+        "checkpoint_name": checkpoint_name,
+        "task": task,
     }
 
 
@@ -149,6 +170,8 @@ def page(title: str, root: Path, info: dict[str, object] | None, render_enabled:
           <video controls autoplay muted playsinline src="{video_src}"></video>
           <dl>
             <div><dt>File</dt><dd>{html.escape(str(info["relative_path"]))}</dd></div>
+            <div><dt>Checkpoint</dt><dd>{html.escape(str(info.get("checkpoint_name") or "unknown"))}</dd></div>
+            <div><dt>Task</dt><dd>{html.escape(str(info.get("task") or "unknown"))}</dd></div>
             <div><dt>Created (Honolulu)</dt><dd>{html.escape(str(info["created_honolulu"]))}</dd></div>
             <div><dt>Created (Toronto)</dt><dd>{html.escape(str(info["created_toronto"]))}</dd></div>
             <div><dt>Size</dt><dd>{info["size_mb"]} MB</dd></div>
