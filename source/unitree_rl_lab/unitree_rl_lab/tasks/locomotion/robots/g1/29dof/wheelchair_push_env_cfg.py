@@ -1358,6 +1358,37 @@ class MinimalPhysXRailFastLeanVelocityProgressHardAttachDynamicWheelchairPushAtt
 
 
 @configclass
+class MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg(
+    MinimalPhysXRailFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """1 m/s version of the reproducible 2 m/s fast-lean hard-attach task."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.commands.base_velocity.ranges.lin_vel_x = (1.0, 1.0)
+        self.commands.base_velocity.limit_ranges.lin_vel_x = (1.0, 1.0)
+        self.rewards.wheelchair_track_forward_velocity.params["std"] = 0.4
+        self.rewards.wheelchair_forward_progress.params["max_velocity"] = 1.4
+
+
+@configclass
+class MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedPPORunnerCfg(
+    MinimalPhysXRailFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_minimal_physx_rail_1mps_fast_lean_hard_attach_push_attached"
+
+
+@configclass
 class MinimalPhysXRailFastLeanVelocityProgressHardAttachNoGuardDynamicWheelchairPushAttachedRobotEnvCfg(
     MinimalPhysXRailFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg
 ):
