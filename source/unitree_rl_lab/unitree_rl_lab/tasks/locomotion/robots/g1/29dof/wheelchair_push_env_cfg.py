@@ -1436,8 +1436,8 @@ class MinimalPhysXRail1mpsGaitSweepSmoothLightRobotEnvCfg(
     def __post_init__(self):
         super().__post_init__()
         self.rewards.action_rate.weight = -0.005
-        self.rewards.joint_acc.weight = -2.5e-7
-        self.rewards.energy.weight = -2.0e-6
+        self.rewards.joint_acc.weight = 0.0
+        self.rewards.energy.weight = -2.0e-7
 
 
 @configclass
@@ -1463,8 +1463,8 @@ class MinimalPhysXRail1mpsGaitSweepSmoothMediumRobotEnvCfg(
     def __post_init__(self):
         super().__post_init__()
         self.rewards.action_rate.weight = -0.02
-        self.rewards.joint_acc.weight = -1.0e-6
-        self.rewards.energy.weight = -8.0e-6
+        self.rewards.joint_acc.weight = 0.0
+        self.rewards.energy.weight = -5.0e-7
 
 
 @configclass
