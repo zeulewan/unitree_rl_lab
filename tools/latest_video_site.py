@@ -95,7 +95,11 @@ def latest_video(root: Path) -> Path | None:
 
 
 def recent_videos(root: Path, limit: int = 12) -> list[Path]:
-    videos = [path for path in root.rglob("*.mp4") if path.is_file()]
+    videos = [
+        path
+        for path in root.rglob("*.mp4")
+        if path.is_file() and "latest-site" not in path.relative_to(root).parts
+    ]
     return sorted(videos, key=lambda path: path.stat().st_mtime, reverse=True)[:limit]
 
 
