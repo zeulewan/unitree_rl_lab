@@ -1389,6 +1389,36 @@ class MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPus
 
 
 @configclass
+class MinimalPhysXRail1mpsFastLeanSmallYawTorqueHardAttachDynamicWheelchairPushAttachedRobotEnvCfg(
+    MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """1 m/s hard-attach task with a small penalty for twisting against the wheelchair rail."""
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.rewards.wheelchair_rail_yaw_torque.weight = -0.005
+
+
+@configclass
+class MinimalPhysXRail1mpsFastLeanSmallYawTorqueHardAttachDynamicWheelchairPushAttachedRobotPlayEnvCfg(
+    MinimalPhysXRail1mpsFastLeanSmallYawTorqueHardAttachDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalPhysXRail1mpsFastLeanSmallYawTorqueHardAttachDynamicWheelchairPushAttachedPPORunnerCfg(
+    MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = (
+        "unitree_g1_29dof_wheelchair_minimal_physx_rail_1mps_fast_lean_small_yaw_torque_hard_attach_push_attached"
+    )
+
+
+@configclass
 class MinimalPhysXRailFastLeanVelocityProgressHardAttachNoGuardDynamicWheelchairPushAttachedRobotEnvCfg(
     MinimalPhysXRailFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg
 ):
