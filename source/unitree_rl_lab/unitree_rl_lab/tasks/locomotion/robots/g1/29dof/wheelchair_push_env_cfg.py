@@ -1418,6 +1418,179 @@ class MinimalPhysXRail1mpsFastLeanSmallYawTorqueHardAttachDynamicWheelchairPushA
     )
 
 
+def _set_joint_action_scale(env_cfg, leg: float, waist: float, arm: float, wrist: float) -> None:
+    env_cfg.actions.JointPositionAction.scale = {
+        ".*_hip_.*|.*_knee_joint|.*_ankle_.*": leg,
+        "waist_.*": waist,
+        ".*_shoulder_.*|.*_elbow_joint": arm,
+        ".*_wrist_.*": wrist,
+    }
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepSmoothLightRobotEnvCfg(
+    MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """Small smoothness penalty sweep from the 1 m/s hard-attach parent."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.rewards.action_rate.weight = -0.005
+        self.rewards.joint_acc.weight = -2.5e-7
+        self.rewards.energy.weight = -2.0e-6
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepSmoothLightPlayEnvCfg(MinimalPhysXRail1mpsGaitSweepSmoothLightRobotEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepSmoothLightPPORunnerCfg(
+    MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_gait_sweep_smooth_light"
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepSmoothMediumRobotEnvCfg(
+    MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """Medium smoothness penalty sweep from the 1 m/s hard-attach parent."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.rewards.action_rate.weight = -0.02
+        self.rewards.joint_acc.weight = -1.0e-6
+        self.rewards.energy.weight = -8.0e-6
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepSmoothMediumPlayEnvCfg(MinimalPhysXRail1mpsGaitSweepSmoothMediumRobotEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepSmoothMediumPPORunnerCfg(
+    MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_gait_sweep_smooth_medium"
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepFeetLightRobotEnvCfg(
+    MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """Light foot sliding and clearance shaping sweep."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.rewards.feet_slide.weight = -0.05
+        self.rewards.feet_clearance.weight = 0.10
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepFeetLightPlayEnvCfg(MinimalPhysXRail1mpsGaitSweepFeetLightRobotEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepFeetLightPPORunnerCfg(
+    MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_gait_sweep_feet_light"
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepGaitLightRobotEnvCfg(
+    MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """Light alternating gait-shape sweep."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.rewards.gait.weight = 0.10
+        self.rewards.feet_slide.weight = -0.05
+        self.rewards.feet_clearance.weight = 0.10
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepGaitLightPlayEnvCfg(MinimalPhysXRail1mpsGaitSweepGaitLightRobotEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepGaitLightPPORunnerCfg(
+    MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_gait_sweep_gait_light"
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepPostureLightRobotEnvCfg(
+    MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """Small posture regularization sweep that still allows forward lean."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.rewards.base_linear_velocity.weight = -0.25
+        self.rewards.base_angular_velocity.weight = -0.02
+        self.rewards.flat_orientation_l2.weight = -0.50
+        self.rewards.base_height.weight = -1.0
+        self.rewards.base_height.params["target_height"] = 0.72
+        self.rewards.joint_deviation_waists.weight = -0.05
+        self.rewards.joint_deviation_legs.weight = -0.05
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepPostureLightPlayEnvCfg(MinimalPhysXRail1mpsGaitSweepPostureLightRobotEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepPostureLightPPORunnerCfg(
+    MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_gait_sweep_posture_light"
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepReducedScaleRobotEnvCfg(
+    MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg
+):
+    """Modestly reduced action scale sweep for less aggressive stepping."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        _set_joint_action_scale(self, leg=0.38, waist=0.35, arm=0.18, wrist=0.06)
+        self.rewards.action_rate.weight = -0.005
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepReducedScalePlayEnvCfg(MinimalPhysXRail1mpsGaitSweepReducedScaleRobotEnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.num_envs = 10
+
+
+@configclass
+class MinimalPhysXRail1mpsGaitSweepReducedScalePPORunnerCfg(
+    MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    experiment_name = "unitree_g1_29dof_wheelchair_gait_sweep_reduced_scale"
+
+
 @configclass
 class MinimalPhysXRailFastLeanVelocityProgressHardAttachNoGuardDynamicWheelchairPushAttachedRobotEnvCfg(
     MinimalPhysXRailFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg

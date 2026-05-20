@@ -94,6 +94,11 @@ def latest_video(root: Path) -> Path | None:
     return max(videos, key=lambda path: path.stat().st_mtime)
 
 
+def recent_videos(root: Path, limit: int = 12) -> list[Path]:
+    videos = [path for path in root.rglob("*.mp4") if path.is_file()]
+    return sorted(videos, key=lambda path: path.stat().st_mtime, reverse=True)[:limit]
+
+
 def video_metadata(path: Path) -> dict[str, object]:
     candidates = [path.with_suffix(".json"), path.parent / "latest.json"]
     for candidate in candidates:
@@ -155,6 +160,22 @@ def page(title: str, root: Path, info: dict[str, object] | None, render_enabled:
         </main>
         """
     else:
+        gallery_cards = []
+        for item in filter(None, (video_info(root, path) for path in recent_videos(root, limit=12))):
+            rel_path = str(item["relative_path"])
+            file_url = f"/files/{quote(rel_path, safe='/')}"
+            gallery_cards.append(
+                f"""
+                <article class="videoCard">
+                  <video controls muted playsinline preload="metadata" src="{file_url}"></video>
+                  <h3>{html.escape(str(item.get("checkpoint_name") or item["name"]))}</h3>
+                  <p>{html.escape(str(item.get("task") or "unknown task"))}</p>
+                  <p>{html.escape(str(item["created_toronto"]))}</p>
+                  <a href="{file_url}" download>Download</a>
+                </article>
+                """
+            )
+        gallery = "\n".join(gallery_cards)
         version = quote(str(info["relative_path"]))
         video_src = f"/latest.mp4?v={version}&t={int(float(info['mtime']))}"
         body = f"""
@@ -167,7 +188,7 @@ def page(title: str, root: Path, info: dict[str, object] | None, render_enabled:
               <a class="button secondary" href="/latest.mp4" download>Download</a>
             </div>
           </header>
-          <video controls autoplay muted playsinline src="{video_src}"></video>
+          <video class="primaryVideo" controls autoplay muted playsinline src="{video_src}"></video>
           <dl>
             <div><dt>File</dt><dd>{html.escape(str(info["relative_path"]))}</dd></div>
             <div><dt>Checkpoint</dt><dd>{html.escape(str(info.get("checkpoint_name") or "unknown"))}</dd></div>
@@ -183,6 +204,12 @@ def page(title: str, root: Path, info: dict[str, object] | None, render_enabled:
             </div>
             <p id="renderMeta"></p>
             <pre id="renderLog"></pre>
+          </section>
+          <section class="gallery">
+            <h2>Recent Videos</h2>
+            <div class="videoGrid">
+              {gallery}
+            </div>
           </section>
         </main>
         <script>
@@ -285,6 +312,9 @@ def page(title: str, root: Path, info: dict[str, object] | None, render_enabled:
       border: 1px solid #2a3128;
       border-radius: 8px;
     }}
+    .primaryVideo {{
+      max-height: calc(100vh - 170px);
+    }}
     dl {{
       margin: 0;
       display: grid;
@@ -371,6 +401,45 @@ def page(title: str, root: Path, info: dict[str, object] | None, render_enabled:
       color: #c8d0c2;
       font-size: 12px;
       line-height: 1.45;
+    }}
+    .gallery {{
+      display: grid;
+      gap: 12px;
+    }}
+    .videoGrid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+    }}
+    .videoCard {{
+      border: 1px solid #2a3128;
+      border-radius: 8px;
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+      background: #151914;
+    }}
+    .videoCard video {{
+      max-height: 220px;
+    }}
+    .videoCard h3 {{
+      margin: 0;
+      font-size: 14px;
+      font-weight: 650;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }}
+    .videoCard p {{
+      margin: 0;
+      color: #9daa95;
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }}
+    .videoCard a {{
+      color: #b7db74;
+      font-size: 13px;
+      text-decoration: none;
     }}
   </style>
 </head>

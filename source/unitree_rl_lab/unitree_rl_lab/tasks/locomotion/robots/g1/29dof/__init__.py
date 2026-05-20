@@ -276,6 +276,72 @@ gym.register(
 )
 
 gym.register(
+    id="Unitree-G1-29dof-Wheelchair-GaitSweep-Smooth-Light",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepSmoothLightRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepSmoothLightPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepSmoothLightPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Unitree-G1-29dof-Wheelchair-GaitSweep-Smooth-Medium",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepSmoothMediumRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepSmoothMediumPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepSmoothMediumPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Unitree-G1-29dof-Wheelchair-GaitSweep-Feet-Light",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepFeetLightRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepFeetLightPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepFeetLightPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Unitree-G1-29dof-Wheelchair-GaitSweep-Gait-Light",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepGaitLightRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepGaitLightPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepGaitLightPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Unitree-G1-29dof-Wheelchair-GaitSweep-Posture-Light",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepPostureLightRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepPostureLightPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepPostureLightPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Unitree-G1-29dof-Wheelchair-GaitSweep-Reduced-Scale",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepReducedScaleRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepReducedScalePlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsGaitSweepReducedScalePPORunnerCfg",
+    },
+)
+
+gym.register(
     id="Unitree-G1-29dof-Wheelchair-Minimal-PhysX-Rail-Fast-Lean-Velocity-Progress-Push-Attached-Hard-NoGuard",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
