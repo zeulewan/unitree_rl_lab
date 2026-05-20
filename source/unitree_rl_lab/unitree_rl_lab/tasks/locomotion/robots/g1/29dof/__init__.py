@@ -265,6 +265,17 @@ gym.register(
 )
 
 gym.register(
+    id="Unitree-G1-29dof-Wheelchair-Minimal-PhysX-Rail-1mps-Fast-Lean-Conservative-PPO-Push-Attached-Hard",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg",
+        "play_env_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotPlayEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{__name__}.wheelchair_push_env_cfg:MinimalPhysXRail1mpsFastLeanConservativePPOHardAttachDynamicWheelchairPushAttachedPPORunnerCfg",
+    },
+)
+
+gym.register(
     id="Unitree-G1-29dof-Wheelchair-Minimal-PhysX-Rail-1mps-Fast-Lean-Small-Yaw-Torque-Push-Attached-Hard",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,

@@ -1389,6 +1389,32 @@ class MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPus
 
 
 @configclass
+class MinimalPhysXRail1mpsFastLeanConservativePPOHardAttachDynamicWheelchairPushAttachedPPORunnerCfg(
+    MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedPPORunnerCfg
+):
+    """Same 1 m/s hard-attach task with smaller PPO updates for fragile continuations."""
+
+    experiment_name = (
+        "unitree_g1_29dof_wheelchair_minimal_physx_rail_1mps_fast_lean_conservative_ppo_hard_attach_push_attached"
+    )
+    save_interval = 10
+    algorithm = RslRlPpoAlgorithmCfg(
+        value_loss_coef=1.0,
+        use_clipped_value_loss=True,
+        clip_param=0.03,
+        entropy_coef=0.0,
+        num_learning_epochs=1,
+        num_mini_batches=4,
+        learning_rate=1.0e-5,
+        schedule="adaptive",
+        gamma=0.99,
+        lam=0.95,
+        desired_kl=0.002,
+        max_grad_norm=0.5,
+    )
+
+
+@configclass
 class MinimalPhysXRail1mpsFastLeanSmallYawTorqueHardAttachDynamicWheelchairPushAttachedRobotEnvCfg(
     MinimalPhysXRail1mpsFastLeanVelocityProgressHardAttachDynamicWheelchairPushAttachedRobotEnvCfg
 ):
